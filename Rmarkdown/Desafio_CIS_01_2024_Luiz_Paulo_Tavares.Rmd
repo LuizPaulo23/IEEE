@@ -1,0 +1,328 @@
+---
+title: 'Processo Seletivo 2024: IEEE Computational Intelligence Society, UnB'
+author: "Luiz Paulo Tavares Gonçalves"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r message=FALSE, warning=FALSE}
+
+base::rm(list = ls())
+grDevices::graphics.off()
+# setwd("~/Github/Projetos/IEEE/db")
+
+# Dependências 
+
+pacman::p_load(DataExplorer, 
+               tidyverse,
+               stargazer,
+               Amelia,
+               GGally,
+               broom,
+               nnet)
+```
+
+
+```{r}
+# CONSTANTES & VAR GLOBAIS 
+
+THRESHOLD = 2
+
+```
+
+# Import dataset & cleaning
+
+Após a importação do dataset os nomes das colunas são padronizados, assim, retirando caracteres especiais e espaços e, em segundo, é validado a não existência de duplicação de pacientes (no presente caso, duplicação de ID's). 
+
+
+```{r message=FALSE, warning=FALSE}
+
+
+data_raw = readr::read_csv("Drugs.csv") %>% 
+           janitor::clean_names() %>% 
+           dplyr::distinct(id, .keep_all = TRUE) 
+
+
+```
+
+# **QUESTÃO 01**: No dataset existem alguns valores faltantes. Antes de começar a manipular os dados, trate essas informações e descreva sucintamente as alterações feitas
+
+```{r message=FALSE, warning=FALSE}
+ 
+# Verificando a presença de NA's 
+
+Amelia::missmap(data_raw, 
+                col = c('red','darkorange'),
+                main ='Mapa de Valores Faltantes',
+                legend = T) 
+
+# DataExplorer::plot_intro(data = data_raw)
+
+# Calculando a porcentagem de dados faltantes em cada variável
+
+percent_missing_df <- function(df) {
+
+  missing_test <- base::sapply(df, function(x) {
+    
+    sum(is.na(x)) / length(x) * 100
+    
+  })
+  
+ missing_pct = missing_test %>% 
+               base::as.data.frame() %>% 
+               dplyr::arrange(desc(.)) %>% 
+               dplyr::rename("%" = ".") 
+   
+  
+   table_missing = knitr::kable(missing_pct,
+               caption = "Porcentagem de NA's nas variáveis do Dataset",  
+               col.names = c("Variáveis do Dataset", 
+                             "Porcentagem"),
+               format = "markdown")
+  
+  
+  return(table_missing)
+}
+
+```
+
+Como pode ser verificado no gráfico anterior, há aproximadamente 3% de missings no dataset.Com destaque para a variável **income**. Assim, a seguir é calculado e apresentado a porcentagem de NA's em cada variável: 
+
+
+```{r}
+percent_missing_df(data_raw)
+```
+
+A variável renda (income) tem os incríveis 98,78% de observações como NA's. O restante de variáveis não ultrapassa 0.40% quando o assunto é a presença de NA's. Por simplificidade e tempo de análise, assume-se a partir de agora remoção da variável renda e da linha, isto é, do ID que tenha em alguma variável dados faltantes. Assim,  restando 1853 linhas, ou seja, 1853 id's diferentes na base de dados.   
+
+```{r}
+data_clean = data_raw %>% 
+             # Retirando a variável income por ter 98.78% de NA's 
+            dplyr::select(-income_usd) %>% 
+            stats::na.omit() %>% 
+            dplyr::mutate(age_factor = case_when(age == "18-24" ~ 1, 
+                                                 age == "25-34" ~ 2, 
+                                                 age == "35-44" ~ 3, 
+                                                 age == "45-54" ~ 4, 
+                                                 age == "55-64" ~ 5, 
+                                                 age == "65+" ~ 6))
+```
+
+
+# **QUESTÃO 02**: Qual é a distribuição da idade dos indivíduos na amostra? Existem diferenças significativas nas faixas etárias predominantes de consumo entre os grupos de usuários de diferentes substâncias?
+
+```{r}
+AGE <- c("18-24", "25-34", "35-44", "45-54", "55-64", "65+")
+
+ggplot2::ggplot(data_clean) +
+         aes(x = as.factor(age_factor), 
+             fill = age) + 
+         geom_bar() +
+         scale_x_discrete(labels = AGE) + 
+         scale_fill_brewer(palette = "Oranges", 
+                           direction = -1) +  
+         labs(title = "Distribuição da variável Idade", 
+              subtitle = "Variável Discreta",
+              y = "Contagem",
+              x = "",
+              fill = "") + 
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+
+freqs_age <- data_clean %>% 
+             dplyr::group_by(age) %>% 
+             dplyr::summarise(n = n()) %>% 
+                    ungroup() %>% 
+                    mutate(total = base::sum(n), 
+                    pct = base::round((n/total)*100, THRESHOLD)) %>% select(-total) 
+
+
+knitr::kable(freqs_age,
+             caption = "Estatísticas Descritivas da variável Idade",  
+             col.names = c("Idade", 
+                           "Frequência Absoluta", 
+                           "Frequência Relativa"),
+             format = "markdown")
+```
+
+Como pode ser observado, a população jovem, entre 18 a 34, ocupa a maior parcela da amostra; somando-se um total de 59,79% da amostra. Agora vamos segmentar o mesmo cálculo por grupos de usuários de diferentes substâncias. 
+
+
+```{r message=FALSE, warning=FALSE}
+# Segmento por grupos de usuários de diferentes substâncias
+
+seg_age <- data_clean %>% 
+           dplyr::select(id, 
+                         age, 
+                         alcohol:vsa) %>% 
+           tidyr::pivot_longer(cols = alcohol:vsa, 
+                               values_to = "classification") %>% 
+           dplyr::group_by(age, classification) %>% 
+                  summarise(freq_abs = n()) %>% 
+                  ungroup()
+
+# Visualizando 
+
+ggplot2::ggplot(seg_age) +
+         aes(x = age, y = freq_abs, fill = classification) +
+         geom_col(position = "dodge") +
+         scale_fill_brewer(palette = "Oranges", 
+                           direction = -1) +
+         labs(title = "Distribuição da variável Idade Segmentada por grupos de usuários",
+              y = "Frequência Absoluta",
+              x = "",
+              fill = "")+
+         theme_bw()+
+         theme(legend.position = "bottom")
+
+```
+
+# Há 19 substâncias diferentes com 6 classificações possíveis. 
+
+# **QUESTÃO 03**: Há uma relação entre o nível educacional e o consumo de substâncias?
+
+# **QUESTÃO 04**: Como o gênero influencia no consumo de drogas alucinógenas (LSD, Ecstasy, Ketamine, Cannabis e Mushrooms)? Explique.
+
+```{r}
+
+evid_gender = data_clean %>% 
+              dplyr::select(id, gender, 
+                            lsd, 
+                            ecstasy,
+                            ketamine, 
+                            cannabis, 
+                            mushrooms) %>% 
+              tidyr::pivot_longer(lsd:mushrooms, 
+                                  values_to = "classification") %>% 
+              dplyr::mutate(uso = ifelse(classification == "CL0", 1,0),
+                            classification = factor(classification), 
+                            gender = factor(gender))
+      
+
+
+model_multinominal <- nnet::multinom(classification ~ gender, data = evid_gender)
+
+
+odds_ratios <- base::exp(coef(model_multinominal))
+
+
+knitr::kable(odds_ratios, 
+       caption = "Coeficientes do Modelo Multinominal")
+
+odds_ratios <- odds_ratios %>% 
+               base::as.data.frame() %>% 
+               janitor::clean_names() %>% 
+               rename(Homem = gender_m, 
+                      Mulher = intercept) %>% 
+               mutate(classe = c("CL1", "CL2","CL3","CL4","CL5","CL6")) %>% 
+               tidyr::pivot_longer(cols = Homem:Mulher)
+
+
+ggplot(odds_ratios, 
+       aes(classe, value, colour = name))+
+  geom_point()+
+  labs(title = "Coeficientes: Modelo Multinominal/Politômico",
+       y = "", x = "", colour = "")+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+
+```
+
+
+CL1 ("Usou Mais de Uma Década Atrás"):
+
+Intercepto: A chance de uma mulher estar na categoria CL1 em vez de CL0 é aproximadamente 0.141.
+Gênero Masculino: A chance de um homem estar na categoria CL1 em vez de CL0 é 1.448 vezes a chance de uma mulher.
+
+CL2 ("Usou nos Últimos Dez Anos"):
+
+Intercepto: A chance de uma mulher estar na categoria CL2 em vez de CL0 é aproximadamente 0.163.
+
+Gênero Masculino: A chance de um homem estar na categoria CL2 em vez de CL0 é 1.846 vezes a chance de uma mulher.
+CL3 ("Usou no Último Ano"):
+
+Intercepto: A chance de uma mulher estar na categoria CL3 em vez de CL0 é aproximadamente 0.123.
+Gênero Masculino: A chance de um homem estar na categoria CL3 em vez de CL0 é 3.031 vezes a chance de uma mulher.
+CL4 ("Usou nos Últimos Meses"):
+
+Intercepto: A chance de uma mulher estar na categoria CL4 em vez de CL0 é aproximadamente 0.055.
+Gênero Masculino: A chance de um homem estar na categoria CL4 em vez de CL0 é 3.527 vezes a chance de uma mulher.
+CL5 ("Usou na Última Semana"):
+
+Intercepto: A chance de uma mulher estar na categoria CL5 em vez de CL0 é aproximadamente 0.037.
+Gênero Masculino: A chance de um homem estar na categoria CL5 em vez de CL0 é 3.612 vezes a chance de uma mulher.
+CL6 ("Usou Hoje"):
+
+Intercepto: A chance de uma mulher estar na categoria CL6 em vez de CL0 é aproximadamente 0.056.
+Gênero Masculino: A chance de um homem estar na categoria CL6 em vez de CL0 é 3.081 vezes a chance de uma mulher.
+
+# **QUESTÃO 05**: Qual é a proporção de participantes que se auto-classificam como impulsivos (score superior a zero)? Existe uma correlação entre a impulsividade e o consumo de substâncias?
+
+# **QUESTÃO 06**: Classifique as variáveis entre qualitativas (ordinal ou nominal), ou quantitativas (discreta, contínuas).
+
+# **QUESTÃO 07**: Qual é a proporção de consumo de substâncias legais versus ilícitas na amostra (considere a definição de legalidade segundo a legislação brasileira)?
+
+# **QUESTÃO 08**:Quais fatores predizem a probabilidade de um indivíduo consumir crack (Crack)?
+
+# **QUESTÃO 09**: Qual é a média das pontuações Nscore, Escore, Oscore, AScore, Cscore? Calcule a correlação entre elas.
+
+A segue pode-se visualizar a média e o teste de Shapiro-Wilk para verificar a normalidade das respectivas variáveis, pois o teste de correlação de Pearson pressupõe distribuição Gaussiana. Nota-se que escore, oscore, a_score não tem distribuição Gaussiana, logo, é necessário tomar os resultados com cautela. 
+
+
+A correlação pode ser calculada como segue: 
+
+$$
+r = \frac{\sum (X_i - \overline{X})(Y_i - \overline{Y})}{\sqrt{\sum (X_i - \overline{X})^2 \sum (Y_i - \overline{Y})^2}}
+$$
+
+```{r}
+scores = data_clean %>%
+         dplyr::select(nscore, 
+                       escore, 
+                       oscore, 
+                       a_score, 
+                       cscore) %>% 
+         stats::na.omit() 
+
+for (i in 1:4) {
+ 
+  # Executar o teste de Shapiro-Wilk e média aritmética
+  print("***********************************")
+  cat("Teste de Shapiro-Wilk para a variável: ", base::colnames(scores)[i], "\n")
+  cat("Variável com média: ", base::mean(scores[[i]]), "\n")
+  sw = stats::shapiro.test(scores[[i]])
+  print(sw)
+  
+  
+  if(sw["p.value"] < 0.05){
+    cat("\n")
+    cat("Variável não tem normalidade")
+    cat("\n")
+  } else{
+    cat("\n")
+    cat("Variável com distribuição normal")
+    cat("\n")
+}
+  
+  
+  
+}
+```
+
+
+```{r}
+GGally::ggpairs(scores, 
+                title = "Matriz de correlação")             
+
+
+```
+
