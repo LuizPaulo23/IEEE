@@ -16,7 +16,8 @@ pacman::p_load(DataExplorer,
                GGally,
                broom,
                knitr,
-               nnet)
+               nnet, 
+               car)
 
 
 # CONSTANTES & VAR GLOBAIS 
@@ -112,52 +113,57 @@ seg_age <- data_clean %>%
                          alcohol:vsa) %>% 
            tidyr::pivot_longer(cols = alcohol:vsa, 
                                values_to = "classification") %>% 
-           dplyr::group_by(age, classification) %>% 
+           dplyr::group_by(age, classification, name) %>% 
                   summarise(freq_abs = n()) %>% 
                   ungroup()
 
-# Visualizando 
 
 ggplot2::ggplot(seg_age) +
-         aes(x = age, y = freq_abs, fill = classification) +
-         geom_col(position = "dodge") +
-         scale_fill_brewer(palette = "Oranges", 
-                           direction = -1) +
-         labs(title = "Distribuição da variável Idade Segmentada por grupos de usuários",
-              y = "Frequência Absoluta",
-              x = "",
-              fill = "")+
-         theme_bw()+
-         theme(legend.position = "bottom")
+        aes(x = age, y = freq_abs, fill = classification) +
+        geom_col(position = "fill") +
+        scale_fill_brewer(palette = "Oranges", direction = -1) +
+        labs(title = "Idade Segmentada por grupos de usuários e substância",
+             y = "%",
+             x = "",
+             fill = "")+
+        coord_flip() +
+        theme_minimal()+
+        theme(legend.position = "bottom")+
+        facet_wrap(vars(name))
+
+
+
+t <- seg_age %>% 
+      dplyr::group_by(age, classification) %>% 
+      dplyr::summarise(test = sum(freq_abs))
+
 
 
 # Questão 03 ===================================================================
 
-evid_educ = data_clean %>% 
-             dplyr::select(id, 
-                           education, 
-                           alcohol:vsa) %>% 
-             tidyr::pivot_longer(cols = alcohol:vsa, 
-                                 values_to = "classification") %>% 
-             dplyr::mutate(index = ifelse(classification == "CL0", 1, 0))
+seg_edu <- data_clean %>% 
+          dplyr::select(id, 
+                        education, 
+                        alcohol:vsa) %>% 
+          tidyr::pivot_longer(cols = alcohol:vsa, 
+                              values_to = "classification") %>% 
+          dplyr::group_by(education, classification, name) %>% 
+          summarise(freq_abs = n()) %>% 
+          ungroup()
 
 
-model_multinominal <- nnet::multinom(factor(index) ~ factor(education),
-                               data = evid_educ)
-
-
-summary(model_multinominal)
-coeficientes <- broom::tidy(model_multinominal, conf.int = T) # Salvando os coeficientes 
-
-
-
-ggplot(coeficientes, aes(term, estimate))+
-  geom_point()+
-  geom_pointrange(aes(ymin = conf.low, ymax = conf.high))+
-  labs(y = "Coeficientes com intervalo de confiança",x="",
-       title = "Modelo Politômico - Intercepto, Coeficientes")+
-  coord_flip()+
-  theme_bw()
+ggplot2::ggplot(seg_edu ) +
+        aes(x = education, y = freq_abs, fill = classification) +
+        geom_col(position = "fill") +
+        scale_fill_brewer(palette = "Oranges", direction = -1) +
+        labs(title = "Idade Segmentada por grupos de usuários e substância",
+             y = "%",
+             x = "",
+             fill = "")+
+        coord_flip() +
+        theme_minimal()+
+        theme(legend.position = "bottom")+
+        facet_wrap(vars(name))
 
 # Questão 04 ==================================================================
 
@@ -202,6 +208,115 @@ ggplot(odds_ratios,
   theme_bw()+
   theme(legend.position = "bottom")
 
+# Questão 05 ===================================================================
+
+impulse <- data_clean %>% 
+            dplyr::select(id, 
+                          impulsive, 
+                          alcohol:vsa) %>% 
+                    mutate(impulsive = as.numeric(impulsive)) %>% 
+            stats::na.omit()
+
+# score superior a zero == Impulsivo 
+
+auto_classificam = table(impulse$impulsive > 0)
+
+
+ggplot(impulse) +
+  aes(x = impulsive) +
+  geom_histogram(bins = 30L, fill = "darkorange") +
+  labs(title = "Distribuição da Impulsividade", x = "", y = "") +
+  theme_minimal() +
+  geom_vline(xintercept = 0, 
+             color = "black",
+             linetype = "dashed") +
+  annotate("text", 
+           x = 2, y = 350,
+           label = paste0(round((auto_classificam[2] / (auto_classificam[1] + auto_classificam[2]))*100, 2), "% se classificam como impulsivos"), 
+           color = "black", angle = 0, vjust = 0)
+
+
+# Correlação -------------------------------------------------------------------
+
+cor_spearman <- impulse %>%
+                dplyr::select(-id) %>% 
+                       mutate(across(-impulsive, 
+                                     ~ as.numeric(factor(.,
+                                                        levels = c("CL0", "CL1", "CL2", "CL3", "CL4", "CL5", "CL6"),
+                                                        labels = 0:6))))
+
+
+cor_results <- cor_spearman %>%
+               summarise(across(-impulsive, ~ cor.test(impulsive, ., method = "spearman")$estimate))
+
+cor_results <- cor_results %>% 
+               tidyr::pivot_longer(cols = alcohol:vsa) %>% 
+               dplyr::rename("Substâncias" = "name",
+                             "Correlação" = "value") 
+
+
+knitr::kable(cor_results, 
+             caption = "Correlação de Spearman")
+
+# Questão 06 ===================================================================
+
+six <- data.frame(var = c("id", "age", "gender", 
+                          "education", "country", 
+                          "ethnicity", "income_usd", "nscore", 
+                          "escore", "oscore", "a_score", 
+                          "cscore", "impulsive", "ss", 
+                          "alcohol", 
+                          "amphet", "amyl", "benzos", "caff", 
+                          "cannabis", "choc", "coke", "crack", "ecstasy", 
+                          "heroin", "ketamine", "legalh", "lsd", "meth", 
+                          "mushrooms", "nicotine", "semer", "vsa"), 
+                  qualitativa = c("sim","sim", "sim", 
+                                  "sim", "sim", "sim", "não", "não", 
+                                  "não", "não", "não", "não", "não", "não",
+                                  "sim", 
+                                  "sim", "sim", "sim", "sim", "sim", "sim", "sim", "sim", "sim", "sim", "sim", "sim", 
+                                  "sim", "sim", "sim", "sim", "sim", "sim"), 
+                  classe = c("nominal", "ordinal", "nominal", "ordinal", 
+                             "nominal", "nominal", "contínua", "contínua", 
+                             "contínua", "contínua", "contínua", "contínua", "contínua", 
+                             "contínua", 
+                             "ordinal", 
+                             "ordinal", "ordinal", "ordinal", "ordinal", "ordinal", "ordinal", 
+                             "ordinal", "ordinal", "ordinal", "ordinal", "ordinal", "ordinal", 
+                             "ordinal", "ordinal", "ordinal", "ordinal", "ordinal", "ordinal"))
+
+knitr::kable(six, 
+             caption = "Estrutura dos dados")
+
+# Questão 07 ===================================================================
+
+# Criando um data frame com a classificação das drogas
+drogas <- data.frame(
+  droga = c("alcohol", "amphet", "amyl", "benzos", "caff", "cannabis", 
+            "choc", "coke", "crack", "ecstasy", "heroin", "ketamine", 
+            "legalh", "lsd", "meth", "mushrooms", "nicotine", "semer", "vsa"),
+  status = c("lícita", "ilícita", "ilícita", "ilícita", "lícita", "ilícita", 
+             "lícita", "ilícita", "ilícita", "ilícita", "ilícita", "ilícita", 
+             "ilícita", "ilícita", "ilícita", "ilícita", "lícita", "ilícita", "ilícita"))
+
+knitr::kable(drogas)
+
+status <- data_clean %>% 
+          dplyr::select(alcohol:vsa) %>% 
+          tidyr::pivot_longer(cols = alcohol:vsa) %>% 
+          dplyr::mutate(index = ifelse(name == "alcohol" | 
+                                         name == "caff" |
+                                            name == "choc" |
+                                              name == "nicotine", "liberado", "proibido")) %>% 
+          dplyr::group_by(name, value, index) %>% 
+          dplyr::summarise(freq = n())
+
+# Questão 08 ===================================================================
+
+add_crack <- data_clean %>% 
+             dplyr::mutate(user_crack = ifelse(crack == "CL0", 0,1)) %>% 
+                    select(-id, -age_factor) %>% 
+                    relocate(user_crack, .after = NULL)
 
 
 # Questão 09 ===================================================================
@@ -242,4 +357,13 @@ for (i in 1:4) {
 GGally::ggpairs(scores, 
                 title = "Matriz de correlação")             
 
+# Questão 13 =====================================================================
+
+country <- data_clean %>% 
+           dplyr::select(country, alcohol:vsa) %>% 
+           tidyr::pivot_longer(cols = alcohol:vsa) %>% 
+           dplyr::group_by(country, name, value) %>% 
+                  summarise(freq = n())
+
+esquisse::esquisser(country)
 

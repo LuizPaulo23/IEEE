@@ -37,7 +37,7 @@ THRESHOLD = 2
 
 ```
 
-# Import dataset & cleaning
+# Import dataset, cleaning & Validation
 
 Após a importação do dataset os nomes das colunas são padronizados, assim, retirando caracteres especiais e espaços e, em segundo, é validado a não existência de duplicação de pacientes (no presente caso, duplicação de ID's). 
 
@@ -118,7 +118,7 @@ data_clean = data_raw %>%
 
 # **QUESTÃO 02**: Qual é a distribuição da idade dos indivíduos na amostra? Existem diferenças significativas nas faixas etárias predominantes de consumo entre os grupos de usuários de diferentes substâncias?
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 AGE <- c("18-24", "25-34", "35-44", "45-54", "55-64", "65+")
 
 ggplot2::ggplot(data_clean) +
@@ -128,12 +128,12 @@ ggplot2::ggplot(data_clean) +
          scale_x_discrete(labels = AGE) + 
          scale_fill_brewer(palette = "Oranges", 
                            direction = -1) +  
-         labs(title = "Distribuição da variável Idade", 
-              subtitle = "Variável Discreta",
+         labs(title = "Distribuição da Idade dos Indivíduos da Amostra", 
+              #subtitle = "Variável Discreta",
               y = "Contagem",
               x = "",
               fill = "") + 
-  theme_bw() +
+  theme_minimal() +
   theme(legend.position = "bottom")
 
 
@@ -165,33 +165,49 @@ seg_age <- data_clean %>%
                          alcohol:vsa) %>% 
            tidyr::pivot_longer(cols = alcohol:vsa, 
                                values_to = "classification") %>% 
-           dplyr::group_by(age, classification) %>% 
+           dplyr::group_by(age, classification, name) %>% 
                   summarise(freq_abs = n()) %>% 
                   ungroup()
 
-# Visualizando 
-
 ggplot2::ggplot(seg_age) +
-         aes(x = age, y = freq_abs, fill = classification) +
-         geom_col(position = "dodge") +
-         scale_fill_brewer(palette = "Oranges", 
-                           direction = -1) +
-         labs(title = "Distribuição da variável Idade Segmentada por grupos de usuários",
-              y = "Frequência Absoluta",
-              x = "",
-              fill = "")+
-         theme_bw()+
-         theme(legend.position = "bottom")
+        aes(x = age, y = freq_abs, fill = classification) +
+        geom_col(position = "fill") +
+        scale_fill_brewer(palette = "Oranges", direction = -1) +
+        labs(title = "Idade Segmentada por grupos de usuários e substância",
+             y = "%",
+             x = "",
+             fill = "")+
+        coord_flip() +
+        theme_minimal()+
+        theme(legend.position = "bottom")+
+        facet_wrap(vars(name))
+
 
 ```
 
-# Há 19 substâncias diferentes com 6 classificações possíveis. 
+Há 19 substâncias diferentes com 7 classificações possíveis: 
+
+CL0: Nunca Usou
+
+CL1: Usou Mais de Uma Década Atrás
+
+CL2: Usou nos Últimos Dez Anos
+
+CL3: Usou no Último Ano (59 vezes)
+
+CL4: Usou nos Últimos Meses
+
+CL5: Usou na Última Semana
+
+CL6: Usou Hoje
+
+Aparentemente há uma relação, menor a idade, maior a proporção de uso de substâncias, isto é, menor a chancer para a classificação "nunca usou". 
 
 # **QUESTÃO 03**: Há uma relação entre o nível educacional e o consumo de substâncias?
 
 # **QUESTÃO 04**: Como o gênero influencia no consumo de drogas alucinógenas (LSD, Ecstasy, Ketamine, Cannabis e Mushrooms)? Explique.
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 
 evid_gender = data_clean %>% 
               dplyr::select(id, gender, 
@@ -238,38 +254,156 @@ ggplot(odds_ratios,
 ```
 
 
-CL1 ("Usou Mais de Uma Década Atrás"):
+**CL1 ("Usou Mais de Uma Década Atrás")**:
 
 Intercepto: A chance de uma mulher estar na categoria CL1 em vez de CL0 é aproximadamente 0.141.
+
 Gênero Masculino: A chance de um homem estar na categoria CL1 em vez de CL0 é 1.448 vezes a chance de uma mulher.
 
-CL2 ("Usou nos Últimos Dez Anos"):
+**CL2 ("Usou nos Últimos Dez Anos")**:
 
 Intercepto: A chance de uma mulher estar na categoria CL2 em vez de CL0 é aproximadamente 0.163.
 
 Gênero Masculino: A chance de um homem estar na categoria CL2 em vez de CL0 é 1.846 vezes a chance de uma mulher.
-CL3 ("Usou no Último Ano"):
+
+**CL3 ("Usou no Último Ano")**:
 
 Intercepto: A chance de uma mulher estar na categoria CL3 em vez de CL0 é aproximadamente 0.123.
+
 Gênero Masculino: A chance de um homem estar na categoria CL3 em vez de CL0 é 3.031 vezes a chance de uma mulher.
-CL4 ("Usou nos Últimos Meses"):
+
+**CL4 ("Usou nos Últimos Meses")**:
 
 Intercepto: A chance de uma mulher estar na categoria CL4 em vez de CL0 é aproximadamente 0.055.
+
 Gênero Masculino: A chance de um homem estar na categoria CL4 em vez de CL0 é 3.527 vezes a chance de uma mulher.
-CL5 ("Usou na Última Semana"):
+
+**CL5 ("Usou na Última Semana")**:
 
 Intercepto: A chance de uma mulher estar na categoria CL5 em vez de CL0 é aproximadamente 0.037.
+
 Gênero Masculino: A chance de um homem estar na categoria CL5 em vez de CL0 é 3.612 vezes a chance de uma mulher.
-CL6 ("Usou Hoje"):
+
+**CL6 ("Usou Hoje")**:
 
 Intercepto: A chance de uma mulher estar na categoria CL6 em vez de CL0 é aproximadamente 0.056.
+
 Gênero Masculino: A chance de um homem estar na categoria CL6 em vez de CL0 é 3.081 vezes a chance de uma mulher.
 
 # **QUESTÃO 05**: Qual é a proporção de participantes que se auto-classificam como impulsivos (score superior a zero)? Existe uma correlação entre a impulsividade e o consumo de substâncias?
 
+```{r message=FALSE, warning=FALSE}
+
+impulse <- data_clean %>% 
+            dplyr::select(id, 
+                          impulsive, 
+                          alcohol:vsa) %>% 
+                    mutate(impulsive = as.numeric(impulsive)) %>% 
+            stats::na.omit()
+
+# score superior a zero == Impulsivo 
+
+auto_classificam = table(impulse$impulsive > 0)
+
+
+ggplot(impulse) +
+  aes(x = impulsive) +
+  geom_histogram(bins = 30L, fill = "darkorange") +
+  labs(title = "Distribuição da Impulsividade", x = "", y = "") +
+  theme_minimal() +
+  geom_vline(xintercept = 0, 
+             color = "black",
+             linetype = "dashed") +
+  annotate("text", 
+           x = 1.5, y = 350,
+           label = paste0(round((auto_classificam[2] / (auto_classificam[1] + auto_classificam[2]))*100, 2), "% se classificam como impulsivos"), 
+           color = "black", angle = 0, vjust = 0)
+
+
+```
+
+Sabendo que quase 50% dos entrevistados consideram-se impulsivos, vamos agora calcular a correlação de Spearman (considerando não normalidade entre a correlação da impulsividade com as substâncias - variável ordinal de 1 a 7). A correlação de Spearman pode ser calculada como segue: 
+
+$$
+\rho = 1 - \frac{6 \sum d_i^2}{n(n^2 - 1)}
+$$
+
+```{r message=FALSE, warning=FALSE}
+# Correlação -------------------------------------------------------------------
+
+cor_spearman <- impulse %>%
+                dplyr::select(-id) %>% 
+                       mutate(across(-impulsive, 
+                                     ~ as.numeric(factor(.,
+                                                        levels = c("CL0", "CL1", "CL2", "CL3", "CL4", "CL5", "CL6"),
+                                                        labels = 0:6))))
+
+
+cor_results <- cor_spearman %>%
+               summarise(across(-impulsive, ~ cor.test(impulsive, ., method = "spearman")$estimate))
+
+cor_results <- cor_results %>% 
+               tidyr::pivot_longer(cols = alcohol:vsa) %>% 
+               dplyr::rename("Substâncias" = "name",
+                             "Correlação" = "value") 
+
+
+knitr::kable(cor_results, 
+             caption = "Correlação de Spearman")
+```
+
+
+
 # **QUESTÃO 06**: Classifique as variáveis entre qualitativas (ordinal ou nominal), ou quantitativas (discreta, contínuas).
 
+
+```{r}
+six <- data.frame(var = c("id", "age", "gender", 
+                          "education", "country", 
+                          "ethnicity", "income_usd", "nscore", 
+                          "escore", "oscore", "a_score", 
+                          "cscore", "impulsive", "ss", 
+                          "alcohol", 
+                          "amphet", "amyl", "benzos", "caff", 
+                          "cannabis", "choc", "coke", "crack", "ecstasy", 
+                          "heroin", "ketamine", "legalh", "lsd", "meth", 
+                          "mushrooms", "nicotine", "semer", "vsa"), 
+                  qualitativa = c("sim","sim", "sim", 
+                                  "sim", "sim", "sim", "não", "não", 
+                                  "não", "não", "não", "não", "não", "não",
+                                  "sim", 
+                                  "sim", "sim", "sim", "sim", "sim", "sim", "sim", "sim", "sim", "sim", "sim", "sim", 
+                                  "sim", "sim", "sim", "sim", "sim", "sim"), 
+                  classe = c("nominal", "ordinal", "nominal", "ordinal", 
+                             "nominal", "nominal", "contínua", "contínua", 
+                             "contínua", "contínua", "contínua", "contínua", "contínua", 
+                             "contínua", 
+                             "ordinal", 
+                             "ordinal", "ordinal", "ordinal", "ordinal", "ordinal", "ordinal", 
+                             "ordinal", "ordinal", "ordinal", "ordinal", "ordinal", "ordinal", 
+                             "ordinal", "ordinal", "ordinal", "ordinal", "ordinal", "ordinal"))
+
+knitr::kable(six, 
+             caption = "Estrutura dos dados")
+```
+
+
 # **QUESTÃO 07**: Qual é a proporção de consumo de substâncias legais versus ilícitas na amostra (considere a definição de legalidade segundo a legislação brasileira)?
+
+```{r}
+# Criando um data frame com a classificação das drogas
+drogas <- data.frame(
+  droga = c("alcohol", "amphet", "amyl", "benzos", "caff", "cannabis", 
+            "choc", "coke", "crack", "ecstasy", "heroin", "ketamine", 
+            "legalh", "lsd", "meth", "mushrooms", "nicotine", "semer", "vsa"),
+  status = c("lícita", "ilícita", "ilícita", "ilícita", "lícita", "ilícita", 
+             "lícita", "ilícita", "ilícita", "ilícita", "ilícita", "ilícita", 
+             "ilícita", "ilícita", "ilícita", "ilícita", "lícita", "ilícita", "ilícita"))
+
+knitr::kable(drogas)
+
+```
+
 
 # **QUESTÃO 08**:Quais fatores predizem a probabilidade de um indivíduo consumir crack (Crack)?
 
@@ -325,4 +459,15 @@ GGally::ggpairs(scores,
 
 
 ```
+
+# **QUESTÃO 10**: Analise a relação entre o nível de educação (Education) e o consumo de diferentes substâncias ilícitas (como LSD, Amphet, Cannabis, etc.). Identifique se há uma correlação significativa entre essas variáveis e, em caso afirmativo, explore a natureza dessa correlação (positiva/negativa).
+
+# **QUESTÃO 11**: Treine uma árvore de decisão para prever se um indivíduo consome uma determinada substância (por exemplo, álcool, anfetaminas, cannabis) com base em suas características demográficas e pontuações de personalidade. Utilize a acurácia para avaliar os seus resultados.
+
+
+# **QUESTÃO 12**:Explore a correlação entre a idade (variável Age) e a experimentação de diferentes substâncias ilícitas. Verifique se há uma tendência de aumento ou diminuição do consumo conforme a idade avança.
+
+
+# **QUESTÃO 13**: Quais são as 3 drogas mais utilizadas para cada país presente na amostra? E quais são as 3 menos utilizadas?
+
 
