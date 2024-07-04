@@ -44,7 +44,6 @@ data_raw = readr::read_csv("Drugs.csv") %>%
            janitor::clean_names() %>% 
            dplyr::distinct(id, .keep_all = TRUE)
         
-
 # Questão 01 ===================================================================
 
 # Verificando a presença de NA's 
@@ -63,7 +62,7 @@ get_pct_missing(data_raw)
 data_clean = data_raw %>% 
              # Retirando a variável income por ter 98.78% de NA's 
             dplyr::select(-income_usd) %>% 
-            stats::na.omit() %>% 
+            stats::na.omit() %>% # Excluindo NA's 
             dplyr::mutate(age_factor = case_when(age == "18-24" ~ 1, 
                                                  age == "25-34" ~ 2, 
                                                  age == "35-44" ~ 3, 
@@ -132,6 +131,35 @@ ggplot2::ggplot(seg_age) +
         theme_minimal()+
         theme(legend.position = "bottom")+
         facet_wrap(vars(name))
+
+# Correlação entre idade e uso de substâncias \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+# REPETIR O CÓDGIO PARA A NÚMERO 03 >> RELAÇÃO ENTRE ESCOLARIDADE E USO DE SUBSTÂNCIAS
+# REPETIÇÃO DESNECESSÁRIO != BOAS PRÁTICAS & CLEAN CODE 
+# CÓDIGO PODE SER REFATORADO 
+
+education_levels <- c("Left school before 16 years", 
+                      "Left school at 16 years", 
+                      "Left school at 17 years", 
+                      "Left school at 18 years", 
+                      "Some college or university, no certificate or degree",
+                      "Professional certificate/ diploma", 
+                      "University degree", 
+                      "Masters degree", 
+                      "Master degree", 
+                      "Doctorate degree")
+
+
+knitr::kable(education_levels,col.names = "Nível",
+             caption = "Nível Educacional - do menor para o maior")
+
+
+seg_edu <- data_clean %>%
+  dplyr::select(education, 
+                alcohol:vsa) %>%
+  mutate(education = factor(education,
+                            levels = education_levels, 
+                            ordered = TRUE)) %>%
+  mutate_if(is.character, as.factor)
 
 
 # Questão 03 & 10 ===================================================================
