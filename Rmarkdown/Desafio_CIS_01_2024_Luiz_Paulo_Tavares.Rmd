@@ -211,6 +211,96 @@ CL6: Usou Hoje
 
 **Aparentemente há uma relação, menor a idade, maior a proporção de uso de substâncias, isto é, menor a chancer para a classificação "nunca usou".** 
 
+Pois bem, buscando visualizar a relação entre idade e consumo de substâncias, pode-se modelar uma correlação de Spearman ($\rho$) e Kendall ($\tau$). Na qual a idade é ordenada da menor para a maior e, por sua vez, o uso de substâncias de CL0 a CL6 (de nunca usou para uso no dia da pesquisa). As correlações podem ser calculadas como segue, respetivamente: 
+
+$$
+\rho = 1 - \frac{6 \sum_{i=1}^{n} d_i^2}{n(n^2 - 1)}
+$$
+
+$$
+\tau = \frac{2 (C - D)}{n(n-1)}
+$$
+
+```{r message=FALSE, warning=FALSE}
+# Correlação entre idade e uso de substâncias \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+# REPETIR O CÓDGIO PARA A NÚMERO 03 >> RELAÇÃO ENTRE ESCOLARIDADE E USO DE SUBSTÂNCIAS
+# REPETIÇÃO DESNECESSÁRIO != BOAS PRÁTICAS & CLEAN CODE 
+# CÓDIGO PODE SER REFATORADO 
+
+# unique(seg_age$age)
+
+age_levels <- c("18-24", 
+                "25-34", 
+                "35-44", 
+                "45-54", 
+                "55-64", 
+                "65+")
+
+
+seg_age <- data_clean %>%
+           dplyr::select(age, 
+                         alcohol:vsa) %>%
+                  mutate(age = factor(age,
+                         levels = age_levels, 
+                         ordered = TRUE)) %>%
+                  mutate_if(is.character, as.factor)
+
+# levels(seg_age$age)
+# levels(seg_age$amphet)
+
+# Correlações ==================================================================
+
+cor_spearman <- function(var) {
+  
+  test <- cor.test(as.numeric(seg_age$age), 
+                   as.numeric(var), method = "spearman")
+  
+  return(c(estimate = test$estimate, p.value = test$p.value))
+  
+}
+
+
+cor_kendall <- function(var) {
+  
+  test <- cor.test(as.numeric(seg_age$age), 
+                   as.numeric(var), method = "kendall")
+  
+  return(c(estimate = test$estimate, p.value = test$p.value))
+}
+
+# Calculando as correlações e p-valores ========================================
+
+correlations_spearman <- base::do.call(rbind, lapply(seg_age[, -1], cor_spearman))
+correlations_kendall <- base::do.call(rbind, lapply(seg_age[, -1], cor_kendall))
+
+
+correlations <- base::data.frame(correlations_kendall,
+                                            correlations_spearman) %>% 
+                           janitor::clean_names() %>% 
+                           dplyr::rename(Kendall = estimate_tau, 
+                                         Spearman = estimate_rho, 
+                                         "P-valor Kendall" = p_value, 
+                                         "P-valor Spearman" = p_value_1) %>% 
+            mutate("***Kendall" = ifelse(`P-valor Kendall` < 0.05,
+                              "Significativo", "Insignificante"), 
+               "***Spearman" = ifelse(`P-valor Spearman` < 0.05,
+               "Significativo", "Insignificante")) %>% 
+                                  relocate(`***Kendall`, .after = `P-valor Kendall`) %>% 
+                                  relocate(`***Spearman`, .after = `P-valor Spearman`) %>% 
+  mutate(`P-valor Kendall` = round(`P-valor Kendall`, 4), 
+         `P-valor Spearman` = round(`P-valor Spearman`, 4), 
+         Kendall = round(Kendall, 4), 
+         Spearman = round(Spearman, 4))
+```
+
+
+
+```{r message=FALSE, warning=FALSE}
+knitr::kable(correlations, caption = "Relação entre Idade e uso de Substâncias")
+
+```
+
+
 \newpage
 
 # **QUESTÃO 03**: Há uma relação entre o nível educacional e o consumo de substâncias?
