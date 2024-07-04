@@ -16,17 +16,21 @@ knitr::opts_chunk$set(echo = FALSE)
 
 base::rm(list = ls())
 grDevices::graphics.off()
-# setwd("~/Github/Projetos/IEEE/db")
+setwd("~/Github/Projetos/IEEE/db")
 
 # Dependências 
 
 pacman::p_load(DataExplorer, 
                tidyverse,
                stargazer,
+               glmnet,
                Amelia,
                GGally,
                broom,
-               nnet)
+               knitr,
+               nnet, 
+               vip,
+               car)
 ```
 
 
@@ -100,7 +104,7 @@ Como pode ser verificado no gráfico anterior, há aproximadamente 3% de missing
 percent_missing_df(data_raw)
 ```
 
-A variável renda (income) tem os incríveis 98,78% de observações como NA's. O restante de variáveis não ultrapassa 0.40% quando o assunto é a presença de NA's. Por simplificidade e tempo de análise, assume-se a partir de agora remoção da variável renda e da linha, isto é, do ID que tenha em alguma variável dados faltantes. Assim,  restando 1853 linhas, ou seja, 1853 id's diferentes na base de dados.   
+A variável renda (income) tem os incríveis 98,78% de observações como NA's. O restante de variáveis não ultrapassa 0.40% quando o assunto é a presença de NA's. **Por simplificidade e tempo de análise, assume-se a partir de agora a remoção da variável renda e da linha que tenha NA, isto é, do ID que tenha em alguma variável dados faltantes. Assim,  restando 1853 linhas, ou seja, 1853 id's diferentes na base de dados para análise.**   
 
 ```{r}
 data_clean = data_raw %>% 
@@ -142,9 +146,12 @@ freqs_age <- data_clean %>%
              dplyr::summarise(n = n()) %>% 
                     ungroup() %>% 
                     mutate(total = base::sum(n), 
-                    pct = base::round((n/total)*100, THRESHOLD)) %>% select(-total) 
+                    pct = base::round((n/total)*100, THRESHOLD)) %>% select(-total)
+```
 
+**Na tabela a seguir pode-se visualizar a frequência absoluta e relativa para a idade dos indivíduos da amostra:**
 
+```{r message=FALSE, warning=FALSE}
 knitr::kable(freqs_age,
              caption = "Estatísticas Descritivas da variável Idade",  
              col.names = c("Idade", 
@@ -201,14 +208,25 @@ CL5: Usou na Última Semana
 
 CL6: Usou Hoje
 
-Aparentemente há uma relação, menor a idade, maior a proporção de uso de substâncias, isto é, menor a chancer para a classificação "nunca usou". 
+**Aparentemente há uma relação, menor a idade, maior a proporção de uso de substâncias, isto é, menor a chancer para a classificação "nunca usou".** 
 
 # **QUESTÃO 03**: Há uma relação entre o nível educacional e o consumo de substâncias?
 
 # **QUESTÃO 04**: Como o gênero influencia no consumo de drogas alucinógenas (LSD, Ecstasy, Ketamine, Cannabis e Mushrooms)? Explique.
 
-```{r message=FALSE, warning=FALSE}
+Para esse problema podemos modelar um modelo multinominal, isto é, um modelo logit (binário) expandido para inferir sobre a existência de influência do gênero no consumo de drogas alucionógenas. Assim, pode-se tomar as ordens de consumo(CLO...CL6) como variável depedente e, por sua vez, a idade como variável explicativa. Porém, observe que a variável dependente no presente caso não é binária, então, precisamos estender o modelo logit para estimar os parâmetros tornando-se um modelo multinominal. O qual   assume a forma de logito para a k-ésima categoria em relação a uma categoria de referência (**no presente caso, CL0, isto é, a categoria "nunca usou"**), expresso como:
 
+$$
+\log \left( \frac{P(Y = k)}{P(Y = 1)} \right) = \beta_{k0} + \beta_{k1} x_1 + \ldots + \beta_{kp} x_p
+$$
+
+Assim, as probabilidades para todas as k categorias são obtidas através da função softmax, que normaliza as probabilidades:
+
+$$
+P(Y = k) = \frac{\exp(\beta_{k0} + \beta_{k1} x_1 + \ldots + \beta_{kp} x_p)}{\sum_{l=1}^{K} \exp(\beta_{l0} + \beta_{l1} x_1 + \ldots + \beta_{lp} x_p)}
+$$
+
+```{r message=FALSE, warning=FALSE}
 evid_gender = data_clean %>% 
               dplyr::select(id, gender, 
                             lsd, 
@@ -221,18 +239,75 @@ evid_gender = data_clean %>%
               dplyr::mutate(uso = ifelse(classification == "CL0", 1,0),
                             classification = factor(classification), 
                             gender = factor(gender))
-      
+```
 
 
+```{r message=FALSE, warning=FALSE, include=FALSE}
 model_multinominal <- nnet::multinom(classification ~ gender, data = evid_gender)
+```
 
+
+```{r message=FALSE, warning=FALSE}
+
+# summary(model_multinominal)
 
 odds_ratios <- base::exp(coef(model_multinominal))
+```
 
+**Estimando o modelo temos:** 
 
+```{r message=FALSE, warning=FALSE}
 knitr::kable(odds_ratios, 
        caption = "Coeficientes do Modelo Multinominal")
+```
 
+## Interpretação de cada coeficiente: 
+
+
+**CL1 - Usou Mais de Uma Década Atrás:**
+
+Intercepto: A chance de uma mulher estar na categoria CL1 em vez de CL0 é aproximadamente 0.141.
+
+Gênero Masculino: A chance de um homem estar na categoria CL1 em vez de CL0 é 1.448 vezes a chance de uma mulher.
+
+**CL2 - Usou nos Últimos Dez Anos:**
+
+Intercepto: A chance de uma mulher estar na categoria CL2 em vez de CL0 é aproximadamente 0.163.
+
+Gênero Masculino: A chance de um homem estar na categoria CL2 em vez de CL0 é 1.846 vezes a chance de uma mulher.
+
+**CL3 - Usou no Último Ano:**
+
+Intercepto: A chance de uma mulher estar na categoria CL3 em vez de CL0 é aproximadamente 0.123.
+
+Gênero Masculino: A chance de um homem estar na categoria CL3 em vez de CL0 é 3.031 vezes a chance de uma mulher.
+
+**CL4 - Usou nos Últimos Meses:**
+
+Intercepto: A chance de uma mulher estar na categoria CL4 em vez de CL0 é aproximadamente 0.055.
+
+Gênero Masculino: A chance de um homem estar na categoria CL4 em vez de CL0 é 3.527 vezes a chance de uma mulher.
+
+**CL5 - Usou na Última Semana:**
+
+Intercepto: A chance de uma mulher estar na categoria CL5 em vez de CL0 é aproximadamente 0.037.
+
+Gênero Masculino: A chance de um homem estar na categoria CL5 em vez de CL0 é 3.612 vezes a chance de uma mulher.
+
+**CL6 - Usou Hoje:**
+
+Intercepto: A chance de uma mulher estar na categoria CL6 em vez de CL0 é aproximadamente 0.056.
+
+Gênero Masculino: A chance de um homem estar na categoria CL6 em vez de CL0 é 3.081 vezes a chance de uma mulher.
+
+
+## Conclusão geral: 
+
+**Nota-se que os homens são mais vuneráveis na possibilidade de consumir alguma substância. A chance de um homem consumir "hoje" alguma droga é 3.081 vezes a chance de uma mulher (enquanto de uma mulher consumir "hoje" é de apenas 0.056)**.  
+
+
+
+```{r message=FALSE, warning=FALSE}
 odds_ratios <- odds_ratios %>% 
                base::as.data.frame() %>% 
                janitor::clean_names() %>% 
@@ -240,55 +315,23 @@ odds_ratios <- odds_ratios %>%
                       Mulher = intercept) %>% 
                mutate(classe = c("CL1", "CL2","CL3","CL4","CL5","CL6")) %>% 
                tidyr::pivot_longer(cols = Homem:Mulher)
+```
 
 
+### Os coeficientes podem ser resumidos no seguinte plote para uma melhor visualização: 
+
+
+```{r message=FALSE, warning=FALSE}
 ggplot(odds_ratios, 
        aes(classe, value, colour = name))+
   geom_point()+
   labs(title = "Coeficientes: Modelo Multinominal/Politômico",
-       y = "", x = "", colour = "")+
-  theme_bw()+
+       y = "Coeficientes", x = "Uso de substâncias", colour = "")+
+  theme_minimal()+
   theme(legend.position = "bottom")
 
 
 ```
-
-
-**CL1 ("Usou Mais de Uma Década Atrás")**:
-
-Intercepto: A chance de uma mulher estar na categoria CL1 em vez de CL0 é aproximadamente 0.141.
-
-Gênero Masculino: A chance de um homem estar na categoria CL1 em vez de CL0 é 1.448 vezes a chance de uma mulher.
-
-**CL2 ("Usou nos Últimos Dez Anos")**:
-
-Intercepto: A chance de uma mulher estar na categoria CL2 em vez de CL0 é aproximadamente 0.163.
-
-Gênero Masculino: A chance de um homem estar na categoria CL2 em vez de CL0 é 1.846 vezes a chance de uma mulher.
-
-**CL3 ("Usou no Último Ano")**:
-
-Intercepto: A chance de uma mulher estar na categoria CL3 em vez de CL0 é aproximadamente 0.123.
-
-Gênero Masculino: A chance de um homem estar na categoria CL3 em vez de CL0 é 3.031 vezes a chance de uma mulher.
-
-**CL4 ("Usou nos Últimos Meses")**:
-
-Intercepto: A chance de uma mulher estar na categoria CL4 em vez de CL0 é aproximadamente 0.055.
-
-Gênero Masculino: A chance de um homem estar na categoria CL4 em vez de CL0 é 3.527 vezes a chance de uma mulher.
-
-**CL5 ("Usou na Última Semana")**:
-
-Intercepto: A chance de uma mulher estar na categoria CL5 em vez de CL0 é aproximadamente 0.037.
-
-Gênero Masculino: A chance de um homem estar na categoria CL5 em vez de CL0 é 3.612 vezes a chance de uma mulher.
-
-**CL6 ("Usou Hoje")**:
-
-Intercepto: A chance de uma mulher estar na categoria CL6 em vez de CL0 é aproximadamente 0.056.
-
-Gênero Masculino: A chance de um homem estar na categoria CL6 em vez de CL0 é 3.081 vezes a chance de uma mulher.
 
 # **QUESTÃO 05**: Qual é a proporção de participantes que se auto-classificam como impulsivos (score superior a zero)? Existe uma correlação entre a impulsividade e o consumo de substâncias?
 
@@ -352,10 +395,14 @@ knitr::kable(cor_results,
              caption = "Correlação de Spearman")
 ```
 
+**Conclusão: como pode ser observado, todas as variáveis têm correlação fraca e positiva com a impulsividade, com exceção da variável choc (chocolate). Com destaque para a maconha (cannabis) com maior correlação.**
+
 
 
 # **QUESTÃO 06**: Classifique as variáveis entre qualitativas (ordinal ou nominal), ou quantitativas (discreta, contínuas).
 
+
+**A classificação das variáveis pode ser visualizado na tabela a seguir:** 
 
 ```{r}
 six <- data.frame(var = c("id", "age", "gender", 
@@ -407,6 +454,82 @@ knitr::kable(drogas)
 
 # **QUESTÃO 08**:Quais fatores predizem a probabilidade de um indivíduo consumir crack (Crack)?
 
+
+Para verificar quais variáveis são mais relevantes para predizer o consumo de crack, pode-se modelar uma regressão via LASSO. Na qual temos a seguinte função de custo com parâmetro $\lambda$ de regularização:   
+
+$$
+\min_{\beta_0, \beta} \left\{ \frac{1}{2N} \sum_{i=1}^{N} \left( y_i - \beta_0 - \sum_{j=1}^{p} \beta_j x_{ij} \right)^2 + \lambda \sum_{j=1}^{p} |\beta_j| \right\}
+$$
+
+Observe que com $\lambda$ igual a zero temos a minimazação clássica de mínimos quadrados. Porém, à medida que $\lambda$  aumenta, a penalização faz com que os coeficientes sejam encolhidos em direção a zero, ou seja, removendo alguns coeficientes que são exatamente iguais a zero (menos relevantes). 
+
+
+Assim, no presente caso, pode-se modelar uma regressão na qual a variável dependente é o uso ou não de crack (0 = caso nunca usou, 1 = caso tenha usado alguma vez na vida) contra todas as variáveis do dataset. Por fim, via LASSO, filtra-se as 10 mais relevantes para explicar o uso de crack: 
+
+
+```{r}
+
+add_crack <- data_clean %>% 
+             dplyr::mutate(user_crack = ifelse(crack == "CL0", 0,1)) %>% 
+                    select(-id, -age_factor, -crack) %>% 
+                    relocate(user_crack, .after = NULL) %>% 
+                    mutate(age = factor(age), 
+                           gender = factor(gender),
+                           education = factor(education), 
+                           country = factor(country), 
+                           ethnicity = factor(ethnicity), 
+                           alcohol = factor(alcohol), 
+                           amphet = factor(amphet), 
+                           amyl = factor(amyl), 
+                           benzos = factor(benzos), 
+                           caff = factor(caff), 
+                           cannabis = factor(cannabis), 
+                           choc = factor(choc), 
+                           coke = factor(coke), 
+                           ecstasy = factor(ecstasy), 
+                           heroin = factor(heroin), 
+                           ketamine = factor(ketamine), 
+                           legalh = factor(legalh), 
+                           lsd = factor(lsd), 
+                           meth = factor(meth), 
+                           mushrooms = factor(mushrooms), 
+                           nicotine = factor(nicotine), 
+                           semer = factor(semer), 
+                           vsa = factor(vsa))
+
+
+# Modelo LASSO para seleção de variáveis 
+
+add_crack_matrix <- stats::model.matrix(user_crack ~ ., data = add_crack)[,-1]
+
+cv_lasso <- glmnet::cv.glmnet(add_crack_matrix, 
+                              add_crack$user_crack,
+                              alpha = 1, family = "binomial")
+
+best_lambda <- cv_lasso$lambda.min
+
+# Ajustar o modelo com o melhor lambda 
+
+lasso_model <- glmnet(add_crack_matrix,
+                      add_crack$user_crack, alpha = 1, 
+                      family = "binomial", lambda = best_lambda)
+```
+
+
+```{r}
+
+vip::vip(lasso_model, 
+    lambda = best_lambda,
+    num_features = 10) +
+    geom_bar(stat = "identity", 
+             fill = "darkorange")+
+    ggtitle("Variáveis mais relevantes para explicar o uso de crack")
+    
+```
+
+**Conclusão: De acordo com o método adotado, o uso de cogumelos mágicos "hoje", heroína no "último mês" e "hoje", respectivamente, são as três variáveis mais relevantes para explicar o uso de crack. O restante das variáveis relevantes são: VSA (classe de consumo de abuso de substâncias voláteis), uso de heroína e cocaína. Drogas que, de fato, costumeiramente estão correlacionadas com o uso de drogas mais pesadas como o crack.**
+
+
 # **QUESTÃO 09**: Qual é a média das pontuações Nscore, Escore, Oscore, AScore, Cscore? Calcule a correlação entre elas.
 
 A segue pode-se visualizar a média e o teste de Shapiro-Wilk para verificar a normalidade das respectivas variáveis, pois o teste de correlação de Pearson pressupõe distribuição Gaussiana. Nota-se que escore, oscore, a_score não tem distribuição Gaussiana, logo, é necessário tomar os resultados com cautela. 
@@ -452,15 +575,17 @@ for (i in 1:4) {
 }
 ```
 
+**Assim, pode-se visualizar a correlação de Pearson:** 
 
 ```{r}
 GGally::ggpairs(scores, 
                 title = "Matriz de correlação")             
 
-
 ```
 
 # **QUESTÃO 10**: Analise a relação entre o nível de educação (Education) e o consumo de diferentes substâncias ilícitas (como LSD, Amphet, Cannabis, etc.). Identifique se há uma correlação significativa entre essas variáveis e, em caso afirmativo, explore a natureza dessa correlação (positiva/negativa).
+
+
 
 # **QUESTÃO 11**: Treine uma árvore de decisão para prever se um indivíduo consome uma determinada substância (por exemplo, álcool, anfetaminas, cannabis) com base em suas características demográficas e pontuações de personalidade. Utilize a acurácia para avaliar os seus resultados.
 
