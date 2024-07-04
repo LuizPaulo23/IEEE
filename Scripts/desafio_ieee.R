@@ -12,11 +12,13 @@ setwd("~/Github/Projetos/IEEE/db")
 pacman::p_load(DataExplorer, 
                tidyverse,
                stargazer,
+               glmnet,
                Amelia,
                GGally,
                broom,
                knitr,
                nnet, 
+               vip,
                car)
 
 
@@ -131,12 +133,24 @@ ggplot2::ggplot(seg_age) +
         theme(legend.position = "bottom")+
         facet_wrap(vars(name))
 
+# Orgzanização dos dados para modelagem adequada
+
+# modelagem <- seg_age %>% 
+#              dplyr::mutate(index = ifelse(classification == "CL0", 0, 1), 
+#                            age = factor(age))
 
 
-t <- seg_age %>% 
-      dplyr::group_by(age, classification) %>% 
-      dplyr::summarise(test = sum(freq_abs))
-
+# sum_group <- modelagem_logit %>% 
+#              dplyr::group_by(index, age) %>% 
+#              dplyr::summarise(soma = sum(freq_abs)) %>% 
+#                     ungroup() %>% 
+#                     mutate(classe = ifelse(index == 0, "Usou", "Não usou"))
+# 
+# ggplot(sum_group) +
+#   aes(x = age, y = soma, fill = classe) +
+#   geom_col(position = "dodge2") +
+#   scale_fill_brewer(palette = "Oranges", direction = -1) +
+#   theme_minimal()
 
 
 # Questão 03 ===================================================================
@@ -152,18 +166,7 @@ seg_edu <- data_clean %>%
           ungroup()
 
 
-ggplot2::ggplot(seg_edu ) +
-        aes(x = education, y = freq_abs, fill = classification) +
-        geom_col(position = "fill") +
-        scale_fill_brewer(palette = "Oranges", direction = -1) +
-        labs(title = "Idade Segmentada por grupos de usuários e substância",
-             y = "%",
-             x = "",
-             fill = "")+
-        coord_flip() +
-        theme_minimal()+
-        theme(legend.position = "bottom")+
-        facet_wrap(vars(name))
+
 
 # Questão 04 ==================================================================
 
@@ -315,9 +318,57 @@ status <- data_clean %>%
 
 add_crack <- data_clean %>% 
              dplyr::mutate(user_crack = ifelse(crack == "CL0", 0,1)) %>% 
-                    select(-id, -age_factor) %>% 
-                    relocate(user_crack, .after = NULL)
+                    select(-id, -age_factor, -crack) %>% 
+                    relocate(user_crack, .after = NULL) %>% 
+                    mutate(age = factor(age), 
+                           gender = factor(gender),
+                           education = factor(education), 
+                           country = factor(country), 
+                           ethnicity = factor(ethnicity), 
+                           alcohol = factor(alcohol), 
+                           amphet = factor(amphet), 
+                           amyl = factor(amyl), 
+                           benzos = factor(benzos), 
+                           caff = factor(caff), 
+                           cannabis = factor(cannabis), 
+                           choc = factor(choc), 
+                           coke = factor(coke), 
+                           ecstasy = factor(ecstasy), 
+                           heroin = factor(heroin), 
+                           ketamine = factor(ketamine), 
+                           legalh = factor(legalh), 
+                           lsd = factor(lsd), 
+                           meth = factor(meth), 
+                           mushrooms = factor(mushrooms), 
+                           nicotine = factor(nicotine), 
+                           semer = factor(semer), 
+                           vsa = factor(vsa))
 
+
+# Modelo LASSO para seleção de variáveis 
+
+add_crack_matrix <- stats::model.matrix(user_crack ~ ., data = add_crack)[,-1]
+
+cv_lasso <- glmnet::cv.glmnet(add_crack_matrix, 
+                              add_crack$user_crack,
+                              alpha = 1, family = "binomial")
+
+best_lambda <- cv_lasso$lambda.min
+
+# Ajustar o modelo com o melhor lambda 
+
+lasso_model <- glmnet(add_crack_matrix,
+                      add_crack$user_crack, alpha = 1, 
+                      family = "binomial", lambda = best_lambda)
+
+
+vip(lasso_model, 
+    lambda = best_lambda,
+    num_features = 10) +
+    geom_bar(stat = "identity", 
+             fill = "darkorange")+
+    ggtitle("Variáveis mais relevantes para explicar o uso de crack")+
+    
 
 # Questão 09 ===================================================================
 
