@@ -133,40 +133,81 @@ ggplot2::ggplot(seg_age) +
         theme(legend.position = "bottom")+
         facet_wrap(vars(name))
 
-# Orgzanização dos dados para modelagem adequada
 
-# modelagem <- seg_age %>% 
-#              dplyr::mutate(index = ifelse(classification == "CL0", 0, 1), 
-#                            age = factor(age))
+# Questão 03 & 10 ===================================================================
 
+# Ordenando o nível de escolaridade - do menor para o maior: 
 
-# sum_group <- modelagem_logit %>% 
-#              dplyr::group_by(index, age) %>% 
-#              dplyr::summarise(soma = sum(freq_abs)) %>% 
-#                     ungroup() %>% 
-#                     mutate(classe = ifelse(index == 0, "Usou", "Não usou"))
-# 
-# ggplot(sum_group) +
-#   aes(x = age, y = soma, fill = classe) +
-#   geom_col(position = "dodge2") +
-#   scale_fill_brewer(palette = "Oranges", direction = -1) +
-#   theme_minimal()
+education_levels <- c("Left school before 16 years", 
+                      "Left school at 16 years", 
+                      "Left school at 17 years", 
+                      "Left school at 18 years", 
+                      "Some college or university, no certificate or degree",
+                      "Professional certificate/ diploma", 
+                      "University degree", 
+                      "Masters degree", 
+                      "Master degree", 
+                      "Doctorate degree")
 
 
-# Questão 03 ===================================================================
-
-seg_edu <- data_clean %>% 
-          dplyr::select(id, 
-                        education, 
-                        alcohol:vsa) %>% 
-          tidyr::pivot_longer(cols = alcohol:vsa, 
-                              values_to = "classification") %>% 
-          dplyr::group_by(education, classification, name) %>% 
-          summarise(freq_abs = n()) %>% 
-          ungroup()
+knitr::kable(education_levels,col.names = "Nível",
+               caption = "Nível Educacional - do menor para o maior")
 
 
+seg_edu <- data_clean %>%
+           dplyr::select(education, 
+                         alcohol:vsa) %>%
+                  mutate(education = factor(education,
+                         levels = education_levels, 
+                         ordered = TRUE)) %>%
+                  mutate_if(is.character, as.factor)
 
+
+# levels(seg_edu$education)
+# levels(seg_edu$alcohol)
+
+# Correlações ==================================================================
+
+cor_spearman <- function(var) {
+  
+  test <- cor.test(as.numeric(seg_edu$education), 
+                   as.numeric(var), method = "spearman")
+  
+  return(c(estimate = test$estimate, p.value = test$p.value))
+  
+}
+
+
+cor_kendall <- function(var) {
+  
+  test <- cor.test(as.numeric(seg_edu$education), 
+                   as.numeric(var), method = "kendall")
+  
+  return(c(estimate = test$estimate, p.value = test$p.value))
+}
+
+# Calculando as correlações e p-valores ========================================
+
+correlations_spearman <- base::do.call(rbind, lapply(seg_edu[, -1], cor_spearman))
+correlations_kendall <- base::do.call(rbind, lapply(seg_edu[, -1], cor_kendall))
+
+
+correlations <- base::data.frame(correlations_kendall,
+                                            correlations_spearman) %>% 
+                           janitor::clean_names() %>% 
+                           dplyr::rename(Kendall = estimate_tau, 
+                                         Spearman = estimate_rho, 
+                                         "P-valor Kendall" = p_value, 
+                                         "P-valor Spearman" = p_value_1) %>% 
+                                  mutate("***Kendall" = ifelse(`P-valor Kendall` < 0.05,
+                                                               "Significativo", "Não significativo"), 
+                                         "***Spearman" = ifelse(`P-valor Spearman` < 0.05,
+                                                                "Significativo", "Não significativo")) %>% 
+                                  relocate(`***Kendall`, .after = `P-valor Kendall`) %>% 
+                                  relocate(`***Spearman`, .after = `P-valor Spearman`)
+
+
+knitr::kable(correlations, caption = "Relação entre Educação e uso de Substâncias")
 
 # Questão 04 ==================================================================
 

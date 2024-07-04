@@ -119,6 +119,7 @@ data_clean = data_raw %>%
                                                  age == "65+" ~ 6))
 ```
 
+\newpage
 
 # **QUESTÃO 02**: Qual é a distribuição da idade dos indivíduos na amostra? Existem diferenças significativas nas faixas etárias predominantes de consumo entre os grupos de usuários de diferentes substâncias?
 
@@ -210,7 +211,103 @@ CL6: Usou Hoje
 
 **Aparentemente há uma relação, menor a idade, maior a proporção de uso de substâncias, isto é, menor a chancer para a classificação "nunca usou".** 
 
+\newpage
+
 # **QUESTÃO 03**: Há uma relação entre o nível educacional e o consumo de substâncias?
+
+Para analisar a relação entre as variáveis, primeiro, vamos ordenar o nível de escolaridade em ordem crescente, isto é, da menor escolaridade (Left school before 16 years) a maior (Doctorate degree). Em segundo, vamos transformar em fator (ordinal) o uso de substâncias: iniciando em zero (CLO) até CL6 -- isto é, nunca usou qualquer substância até o uso no dia da pesquisa. A seguir pode-ser osbervar a ordenação do nível de escolaridade: 
+
+```{r message=FALSE, warning=FALSE}
+# Ordenando o nível de escolaridade - do menor para o maior: 
+
+education_levels <- c("Left school before 16 years", 
+                      "Left school at 16 years", 
+                      "Left school at 17 years", 
+                      "Left school at 18 years", 
+                      "Some college or university, no certificate or degree",
+                      "Professional certificate/ diploma", 
+                      "University degree", 
+                      "Masters degree", 
+                      "Master degree", 
+                      "Doctorate degree")
+
+
+knitr::kable(education_levels,col.names = "Nível",
+               caption = "Nível Educacional - do menor para o maior")
+
+
+seg_edu <- data_clean %>%
+           dplyr::select(education, 
+                         alcohol:vsa) %>%
+                  mutate(education = factor(education,
+                         levels = education_levels, 
+                         ordered = TRUE)) %>%
+                  mutate_if(is.character, as.factor)
+
+
+# levels(seg_edu$education)
+# levels(seg_edu$alcohol)
+```
+
+
+**Para verificar a relação entre as variáveis pode-se aplicar a correlação de Spearman ($\rho$) e a correlação de Kendall ($\tau$) como segue, respectivamente**: 
+
+
+```{r message=FALSE, warning=FALSE}
+# Correlações ==================================================================
+
+cor_spearman <- function(var) {
+  
+  test <- cor.test(as.numeric(seg_edu$education), 
+                   as.numeric(var), method = "spearman")
+  
+  return(c(estimate = test$estimate, p.value = test$p.value))
+  
+}
+
+
+cor_kendall <- function(var) {
+  
+  test <- cor.test(as.numeric(seg_edu$education), 
+                   as.numeric(var), method = "kendall")
+  
+  return(c(estimate = test$estimate, p.value = test$p.value))
+}
+
+# Calculando as correlações e p-valores ========================================
+
+correlations_spearman <- base::do.call(rbind, lapply(seg_edu[, -1], cor_spearman))
+correlations_kendall <- base::do.call(rbind, lapply(seg_edu[, -1], cor_kendall))
+
+
+correlations <- base::data.frame(correlations_kendall,
+                                            correlations_spearman) %>% 
+                           janitor::clean_names() %>% 
+                           dplyr::rename(Kendall = estimate_tau, 
+                                         Spearman = estimate_rho, 
+                                         "P-valor Kendall" = p_value, 
+                                         "P-valor Spearman" = p_value_1) %>% 
+                                  mutate("***Kendall" = ifelse(`P-valor Kendall` < 0.05,
+                                                               "Significativo", "Insignificante"), 
+                                         "***Spearman" = ifelse(`P-valor Spearman` < 0.05,
+                                                                "Significativo", "Insignificante")) %>% 
+                                  relocate(`***Kendall`, .after = `P-valor Kendall`) %>% 
+                                  relocate(`***Spearman`, .after = `P-valor Spearman`) %>% 
+  mutate(`P-valor Kendall` = round(`P-valor Kendall`, 4), 
+         `P-valor Spearman` = round(`P-valor Spearman`, 4), 
+         Kendall = round(Kendall, 4), 
+         Spearman = round(Spearman, 4))
+
+
+knitr::kable(correlations, caption = "Relação entre Educação e uso de Substâncias")
+
+```
+
+**Conclusão:** Como pode ser observado na tabela 4 considerando p-valor 0.05, as correlações significativas no geral são fracas e negativas, isto é, com aumento do nível de escolaridade, menor o uso de substância (**mais próximo de nunca usou: CL0**), com exceção das substâncias caff e choc (cafeína e chocolate, respetivamente) que têm correlação positiva. 
+
+
+
+\newpage
 
 # **QUESTÃO 04**: Como o gênero influencia no consumo de drogas alucinógenas (LSD, Ecstasy, Ketamine, Cannabis e Mushrooms)? Explique.
 
@@ -333,6 +430,8 @@ ggplot(odds_ratios,
 
 ```
 
+\newpage
+
 # **QUESTÃO 05**: Qual é a proporção de participantes que se auto-classificam como impulsivos (score superior a zero)? Existe uma correlação entre a impulsividade e o consumo de substâncias?
 
 ```{r message=FALSE, warning=FALSE}
@@ -397,7 +496,7 @@ knitr::kable(cor_results,
 
 **Conclusão: como pode ser observado, todas as variáveis têm correlação fraca e positiva com a impulsividade, com exceção da variável choc (chocolate). Com destaque para a maconha (cannabis) com maior correlação.**
 
-
+\newpage
 
 # **QUESTÃO 06**: Classifique as variáveis entre qualitativas (ordinal ou nominal), ou quantitativas (discreta, contínuas).
 
@@ -434,6 +533,7 @@ knitr::kable(six,
              caption = "Estrutura dos dados")
 ```
 
+\newpage
 
 # **QUESTÃO 07**: Qual é a proporção de consumo de substâncias legais versus ilícitas na amostra (considere a definição de legalidade segundo a legislação brasileira)?
 
@@ -451,6 +551,7 @@ knitr::kable(drogas)
 
 ```
 
+\newpage
 
 # **QUESTÃO 08**:Quais fatores predizem a probabilidade de um indivíduo consumir crack (Crack)?
 
@@ -529,6 +630,7 @@ vip::vip(lasso_model,
 
 **Conclusão: De acordo com o método adotado, o uso de cogumelos mágicos "hoje", heroína no "último mês" e "hoje", respectivamente, são as três variáveis mais relevantes para explicar o uso de crack. O restante das variáveis relevantes são: VSA (classe de consumo de abuso de substâncias voláteis), uso de heroína e cocaína. Drogas que, de fato, costumeiramente estão correlacionadas com o uso de drogas mais pesadas como o crack.**
 
+\newpage
 
 # **QUESTÃO 09**: Qual é a média das pontuações Nscore, Escore, Oscore, AScore, Cscore? Calcule a correlação entre elas.
 
@@ -583,16 +685,23 @@ GGally::ggpairs(scores,
 
 ```
 
+\newpage
+
 # **QUESTÃO 10**: Analise a relação entre o nível de educação (Education) e o consumo de diferentes substâncias ilícitas (como LSD, Amphet, Cannabis, etc.). Identifique se há uma correlação significativa entre essas variáveis e, em caso afirmativo, explore a natureza dessa correlação (positiva/negativa).
 
+## Questão respondida na questão de número 03 
 
+\newpage
 
 # **QUESTÃO 11**: Treine uma árvore de decisão para prever se um indivíduo consome uma determinada substância (por exemplo, álcool, anfetaminas, cannabis) com base em suas características demográficas e pontuações de personalidade. Utilize a acurácia para avaliar os seus resultados.
 
+\newpage
 
 # **QUESTÃO 12**:Explore a correlação entre a idade (variável Age) e a experimentação de diferentes substâncias ilícitas. Verifique se há uma tendência de aumento ou diminuição do consumo conforme a idade avança.
 
+\newpage
 
 # **QUESTÃO 13**: Quais são as 3 drogas mais utilizadas para cada país presente na amostra? E quais são as 3 menos utilizadas?
+
 
 
