@@ -5,17 +5,22 @@
 
 base::rm(list = ls())
 grDevices::graphics.off()
+base::set.seed(123) 
+
 setwd("~/Github/Projetos/IEEE/db")
 
 # Dependências =================================================================
 
-pacman::p_load(DataExplorer, 
+pacman::p_load(DataExplorer,
+               rpart.plot,
                tidyverse,
                stargazer,
                glmnet,
                Amelia,
                GGally,
                broom,
+               rpart,
+               caret,
                knitr,
                nnet, 
                vip,
@@ -137,29 +142,69 @@ ggplot2::ggplot(seg_age) +
 # REPETIÇÃO DESNECESSÁRIO != BOAS PRÁTICAS & CLEAN CODE 
 # CÓDIGO PODE SER REFATORADO 
 
-education_levels <- c("Left school before 16 years", 
-                      "Left school at 16 years", 
-                      "Left school at 17 years", 
-                      "Left school at 18 years", 
-                      "Some college or university, no certificate or degree",
-                      "Professional certificate/ diploma", 
-                      "University degree", 
-                      "Masters degree", 
-                      "Master degree", 
-                      "Doctorate degree")
+unique(seg_age$age)
+
+age_levels <- c("18-24", 
+                "25-34", 
+                "35-44", 
+                "45-54", 
+                "55-64", 
+                "65+")
 
 
-knitr::kable(education_levels,col.names = "Nível",
-             caption = "Nível Educacional - do menor para o maior")
+seg_age <- data_clean %>%
+           dplyr::select(age, 
+                         alcohol:vsa) %>%
+                  mutate(age = factor(age,
+                         levels = age_levels, 
+                         ordered = TRUE)) %>%
+                  mutate_if(is.character, as.factor)
+
+# levels(seg_age$age)
+# levels(seg_age$amphet)
+
+# Correlações ==================================================================
+
+cor_spearman <- function(var) {
+  
+  test <- cor.test(as.numeric(seg_age$age), 
+                   as.numeric(var), method = "spearman")
+  
+  return(c(estimate = test$estimate, p.value = test$p.value))
+  
+}
 
 
-seg_edu <- data_clean %>%
-  dplyr::select(education, 
-                alcohol:vsa) %>%
-  mutate(education = factor(education,
-                            levels = education_levels, 
-                            ordered = TRUE)) %>%
-  mutate_if(is.character, as.factor)
+cor_kendall <- function(var) {
+  
+  test <- cor.test(as.numeric(seg_age$age), 
+                   as.numeric(var), method = "kendall")
+  
+  return(c(estimate = test$estimate, p.value = test$p.value))
+}
+
+# Calculando as correlações e p-valores ========================================
+
+correlations_spearman <- base::do.call(rbind, lapply(seg_age[, -1], cor_spearman))
+correlations_kendall <- base::do.call(rbind, lapply(seg_age[, -1], cor_kendall))
+
+
+correlations <- base::data.frame(correlations_kendall,
+                                 correlations_spearman) %>% 
+  janitor::clean_names() %>% 
+  dplyr::rename(Kendall = estimate_tau, 
+                Spearman = estimate_rho, 
+                "P-valor Kendall" = p_value, 
+                "P-valor Spearman" = p_value_1) %>% 
+  mutate("***Kendall" = ifelse(`P-valor Kendall` < 0.05,
+                               "Significativo", "Não significativo"), 
+         "***Spearman" = ifelse(`P-valor Spearman` < 0.05,
+                                "Significativo", "Não significativo")) %>% 
+  relocate(`***Kendall`, .after = `P-valor Kendall`) %>% 
+  relocate(`***Spearman`, .after = `P-valor Spearman`)
+
+
+knitr::kable(correlations, caption = "Relação entre Idade e uso de Substâncias")
 
 
 # Questão 03 & 10 ===================================================================
@@ -421,7 +466,7 @@ add_crack_matrix <- stats::model.matrix(user_crack ~ ., data = add_crack)[,-1]
 cv_lasso <- glmnet::cv.glmnet(add_crack_matrix, 
                               add_crack$user_crack,
                               alpha = 1, family = "binomial")
-
+summary(cv_lasso)
 best_lambda <- cv_lasso$lambda.min
 
 # Ajustar o modelo com o melhor lambda 
@@ -436,8 +481,47 @@ vip(lasso_model,
     num_features = 10) +
     geom_bar(stat = "identity", 
              fill = "darkorange")+
-    ggtitle("Variáveis mais relevantes para explicar o uso de crack")+
+    ggtitle("Variáveis mais relevantes para explicar o uso de crack")
     
+# Rodando LASSO {forma alternativa} ============================================
+  
+library(glmnet)  
+
+# Use cross-validation to select the lambda that minimizes the mean cross-validated error.
+
+exp = stats::model.matrix(user_crack ~ ., data = add_crack)[,-1]
+
+# Fit Lasso Model
+
+cv_lasso <- glmnet::cv.glmnet(y = add_crack$user_crack, x = exp, alpha = 1, family = "binomial") 
+
+# Visualizando lambda 
+
+plot(cv_lasso)
+
+# Determine the Best Lambda
+
+best_lambda <- cv_lasso$lambda.min
+
+
+#  Re-fit the Lasso Model with the Selected Lambda
+
+lasso_model <- glmnet::glmnet(y = add_crack$user_crack,
+                              x = exp, 
+                              lambda = best_lambda, alpha = 1, family = "binomial") 
+
+#  Investigate the Coefficients
+
+coef(lasso_model)
+
+# graphics.off()
+
+vip::vip(lasso_model, 
+    lambda = best_lambda,
+    num_features = 10) +
+  geom_bar(stat = "identity", 
+           fill = "darkorange")+
+  ggtitle("Variáveis mais relevantes para explicar o uso de crack")
 
 # Questão 09 ===================================================================
 
@@ -477,13 +561,106 @@ for (i in 1:4) {
 GGally::ggpairs(scores, 
                 title = "Matriz de correlação")             
 
+# Questão 11 ===================================================================
+
+db_model = data_clean %>% 
+          dplyr::select(age, 
+                        gender,
+                        education, 
+                        country,
+                        ethnicity, 
+                        alcohol) %>% 
+          mutate(age = factor(age), 
+                 gender = factor(gender),
+                 education = factor(education), 
+                 country = factor(country), 
+                 ethnicity = factor(ethnicity), 
+                 alcohol = ifelse(alcohol == "CL0", 0, 1), 
+                 alcohol = as.factor(alcohol)) %>% 
+          relocate(alcohol, .after = NULL)
+
+    
+ # Chamando a função de pré-processamento 
+ 
+ data_pre_processing = get_pre_processing(db = db_model, 
+                                          transformation = "zscore",
+                                          pct_train = 0.75, 
+                                          var_target = "alcohol")
+    
+# Definindo o controle de treino com validação cruzada de 10 vezes
+
+train_control <- caret::trainControl(method = "cv", number = 10)
+
+# Treinando o modelo
+
+model <- caret::train(alcohol ~ ., 
+                      data = data_pre_processing[["base_train"]], 
+                      method = "rpart", 
+                      trControl = train_control)
+
+# Testar o modelo no conjunto de teste
+
+predictions <- stats::predict(model, newdata = data_pre_processing[["base_test"]])
+confusionMatrix(predictions, data_pre_processing[["base_test"]]$alcohol)
+
+# Plotar a árvore de decisão
+
+# final_model <- model$finalModel
+# rpart.plot(final_model, box.palette="Blues")
+
 # Questão 13 =====================================================================
 
 country <- data_clean %>% 
-           dplyr::select(country, alcohol:vsa) %>% 
-           tidyr::pivot_longer(cols = alcohol:vsa) %>% 
-           dplyr::group_by(country, name, value) %>% 
-                  summarise(freq = n())
+  dplyr::select(country, alcohol:vsa) %>% 
+  tidyr::pivot_longer(cols = alcohol:vsa) %>% 
+  dplyr::mutate(country = trimws(country),
+                country = ifelse(country == "EUA", "USA", country)) %>% 
+  dplyr::filter(value != "CL0") %>% 
+  group_by(country, name) %>% 
+  summarise(n = n()) %>% 
+  ungroup() %>% 
+  group_by(country) %>% 
+  top_n(3, n) %>% 
+  arrange(country, desc(n))
 
-esquisse::esquisser(country)
 
+ggplot(country) +
+  aes(x = country, y = n, fill = name) +
+  geom_col(position = "dodge2") +
+  scale_fill_brewer(palette = "Paired", direction = -1) +
+  xlim("UK", "USA", "Other", "Canada", "Australia", 
+       "Republic of Ireland","New Zealand")+
+  labs(y = "Número de CL0", x = "", fill = "", 
+       title = "3 drogas mais usadas em cada país")+
+  theme_minimal() +
+  theme(legend.position = "bottom")+
+  coord_flip()
+
+
+# Menos usadas: 
+
+country_min <- data_clean %>% 
+  dplyr::select(country, alcohol:vsa) %>% 
+  tidyr::pivot_longer(cols = alcohol:vsa) %>% 
+  dplyr::mutate(country = trimws(country),
+                country = ifelse(country == "EUA", "USA", country)) %>% 
+  dplyr::filter(value != "CL0") %>% 
+  group_by(country, name) %>% 
+  summarise(n = n()) %>% 
+  ungroup() %>% 
+  group_by(country) %>% 
+  slice_min(n, n = 3, with_ties = FALSE) %>% 
+  arrange(country, n)
+
+
+ggplot(country_min) +
+  aes(x = country, y = n, fill = name) +
+  geom_col(position = "dodge2") +
+  scale_fill_brewer(palette = "Paired", direction = -1) +
+  xlim("UK", "USA", "Other", "Canada", "Australia", 
+       "Republic of Ireland","New Zealand")+
+  labs(y = "Número de CL0", x = "", fill = "", 
+       title = "3 drogas menos usadas em cada país")+
+  theme_minimal() +
+  theme(legend.position = "bottom")+
+  coord_flip()
