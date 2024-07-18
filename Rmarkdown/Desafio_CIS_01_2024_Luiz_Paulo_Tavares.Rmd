@@ -20,13 +20,16 @@ setwd("~/Github/Projetos/IEEE/db")
 
 # Dependências 
 
-pacman::p_load(DataExplorer, 
+pacman::p_load(DataExplorer,
+               rpart.plot,
                tidyverse,
                stargazer,
                glmnet,
                Amelia,
                GGally,
                broom,
+               rpart,
+               caret,
                knitr,
                nnet, 
                vip,
@@ -104,7 +107,7 @@ Como pode ser verificado no gráfico anterior, há aproximadamente 3% de missing
 percent_missing_df(data_raw)
 ```
 
-A variável renda (income) tem os incríveis 98,78% de observações como NA's. O restante de variáveis não ultrapassa 0.40% quando o assunto é a presença de NA's. **Por simplificidade e tempo de análise, assume-se a partir de agora a remoção da variável renda e da linha que tenha NA, isto é, do ID que tenha em alguma variável dados faltantes. Assim,  restando 1853 linhas, ou seja, 1853 id's diferentes na base de dados para análise.**   
+A variável renda (income) tem os incríveis 98,78% de observações como NA's. O restante de variáveis não ultrapassa 0.40% quando o assunto é a presença de NA's. **Por simplificidade e tempo de análise, assume-se a partir de agora a remoção da variável renda e das linhas que tenha NA, isto é, do ID que tenha em alguma variável dados faltantes. Assim,  restando 1853 linhas, ou seja, 1853 id's diferentes na base de dados para análise.**   
 
 ```{r}
 data_clean = data_raw %>% 
@@ -300,6 +303,8 @@ knitr::kable(correlations, caption = "Relação entre Idade e uso de Substância
 
 ```
 
+**Conclusão:** Nota-se que nas correlações significativas, há uma negativa correlação fraca entre idade e consumo de substância, ou seja, o aumento da idade está correlacionada negativamente com o uso de substâncias. Com exceção de caff e choc, café e chocolate, respectivamente. **Observe que a resposta da questão 12 já está respondida: correlação negativa**. 
+
 
 \newpage
 
@@ -395,6 +400,7 @@ knitr::kable(correlations, caption = "Relação entre Educação e uso de Subst�
 
 **Conclusão:** Como pode ser observado na tabela 4 considerando p-valor 0.05, as correlações significativas no geral são fracas e negativas, isto é, com aumento do nível de escolaridade, menor o uso de substância (**mais próximo de nunca usou: CL0**), com exceção das substâncias caff e choc (cafeína e chocolate, respetivamente) que têm correlação positiva. 
 
+**Observe que a questão 10 já foi respondida aqui** 
 
 
 \newpage
@@ -785,13 +791,189 @@ GGally::ggpairs(scores,
 
 # **QUESTÃO 11**: Treine uma árvore de decisão para prever se um indivíduo consome uma determinada substância (por exemplo, álcool, anfetaminas, cannabis) com base em suas características demográficas e pontuações de personalidade. Utilize a acurácia para avaliar os seus resultados.
 
+Vamos modelar com a substância álcool, mas poderia ser com qualquer outra, pois as funções ficaram flexíveis e automatizadas. A seguir desenvolve-se as funções (considerando 75% para treino da árvore) considerando uma modelagem binária (já usou a substância alguma vez na vida ou nunca usou a substância). A tabela de estatísticas e acurácia pode ser verificada ao final: 
+
+*já usou = 1*
+
+*nunca usou = 0*
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+get_pre_processing <- function(db, transformation, pct_train, var_target){
+  
+  base::set.seed(123)
+  
+  # Divisao entre base de Treino e Teste
+  
+  data_split <- rsample::initial_split(data = db,
+                                       prop = pct_train)
+  
+  bases <- list(base_train = rsample::training(data_split),
+                base_test  = rsample::testing(data_split))
+  
+# Pré processando Treino e Teste
+# Loop para aplicar as transformações em treino e teste
+  
+  for(i in seq_along(bases)) {
+    bases[[i]] <- bases[[i]] %>%
+                  dplyr::select(-dplyr::all_of(var_target)) %>%
+                  # Imputação pré-definida: mediana *\\
+                  # Na presença de dados faltantes imputa de forma automática 
+                  dplyr::mutate_if(is.numeric,
+                                   zoo::na.aggregate,
+                                   FUN = median,
+                                   na.rm = TRUE) %>%
+                   dplyr::mutate_if(is.numeric, 
+                                    ~dlookr::transform(., method = transformation)) %>%
+                  dplyr::bind_cols(bases[[i]][dplyr::all_of(var_target)]) 
+    
+    # Salvando bases pré-processadas
+    switch(names(bases)[i],
+           base_train = base_train <- base::data.frame(bases[[i]]),
+           base_test = base_test <- base::data.frame(bases[[i]]))
+    
+  }
+  
+  return(bases)
+  
+}
+
+```
+
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+ db_model = data_clean %>% 
+            dplyr::select(age, 
+                          gender,
+                          education, 
+                          country,
+                          ethnicity, 
+                          alcohol) %>% 
+            mutate(age = factor(age), 
+                   gender = factor(gender),
+                   education = factor(education), 
+                   country = factor(country), 
+                   ethnicity = factor(ethnicity), 
+                   alcohol = ifelse(alcohol == "CL0", 0, 1), 
+                   alcohol = as.factor(alcohol)) %>% 
+            relocate(alcohol, .after = NULL)
+
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Chamando a função de pré-processamento 
+ 
+ data_pre_processing = get_pre_processing(db = db_model, 
+                                          transformation = "zscore",
+                                          pct_train = 0.75, 
+                                          var_target = "alcohol")
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Definindo o controle de treino com validação cruzada de 10 vezes
+
+train_control <- caret::trainControl(method = "cv", number = 10)
+
+# Treinando o modelo
+
+model <- caret::train(alcohol ~ ., 
+                      data = data_pre_processing[["base_train"]], 
+                      method = "rpart", 
+                      trControl = train_control)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Testar o modelo no conjunto de teste
+
+predictions <- stats::predict(model, newdata = data_pre_processing[["base_test"]])
+confusionMatrix(predictions, data_pre_processing[["base_test"]]$alcohol)
+
+# Plotar a árvore de decisão
+
+# final_model <- model$finalModel
+# rpart.plot(final_model, box.palette="Blues")
+```
+
+
+
 \newpage
 
 # **QUESTÃO 12**:Explore a correlação entre a idade (variável Age) e a experimentação de diferentes substâncias ilícitas. Verifique se há uma tendência de aumento ou diminuição do consumo conforme a idade avança.
+
+
+## Questão respondida na questão de número 02
 
 \newpage
 
 # **QUESTÃO 13**: Quais são as 3 drogas mais utilizadas para cada país presente na amostra? E quais são as 3 menos utilizadas?
 
+
+```{r message=FALSE, warning=FALSE}
+country <- data_clean %>% 
+            dplyr::select(country, alcohol:vsa) %>% 
+            tidyr::pivot_longer(cols = alcohol:vsa) %>% 
+            dplyr::mutate(country = trimws(country),
+                          country = ifelse(country == "EUA", "USA", country)) %>% 
+            dplyr::filter(value != "CL0") %>% 
+            group_by(country, name) %>% 
+            summarise(n = n()) %>% 
+            ungroup() %>% 
+            group_by(country) %>% 
+            top_n(3, n) %>% 
+            arrange(country, desc(n))
+```
+
+Como queremos encontrar a substância com a maior frequência de uso, pode-se excluir CL0 (isto é, nunca usou). Com o restante podemos fazer uma cotagem, eis a resposta para as 3 substâncias mais consumidas em cada país (como esperado, as substâncias lícitas lideram):  
+
+```{r message=FALSE, warning=FALSE}
+# country$country
+
+ggplot(country) +
+  aes(x = country, y = n, fill = name) +
+  geom_col(position = "dodge2") +
+  scale_fill_brewer(palette = "Paired", direction = -1) +
+  xlim("UK", "USA", "Other", "Canada", "Australia", 
+       "Republic of Ireland","New Zealand")+
+  labs(y = "Número de CL0", x = "", fill = "", 
+       title = "3 drogas mais usadas em cada país")+
+  theme_minimal() +
+  theme(legend.position = "bottom")+
+  coord_flip()
+
+```
+
+```{r message=FALSE, warning=FALSE}
+country_min <- data_clean %>% 
+            dplyr::select(country, alcohol:vsa) %>% 
+            tidyr::pivot_longer(cols = alcohol:vsa) %>% 
+            dplyr::mutate(country = trimws(country),
+                          country = ifelse(country == "EUA", "USA", country)) %>% 
+            dplyr::filter(value != "CL0") %>% 
+            group_by(country, name) %>% 
+  summarise(n = n()) %>% 
+  ungroup() %>% 
+  group_by(country) %>% 
+  slice_min(n, n = 3, with_ties = FALSE) %>% 
+  arrange(country, n)
+```
+```{r}
+ggplot(country_min) +
+  aes(x = country, y = n, fill = name) +
+  geom_col(position = "dodge2") +
+  scale_fill_brewer(palette = "Paired", direction = -1) +
+  xlim("UK", "USA", "Other", "Canada", "Australia", 
+       "Republic of Ireland","New Zealand")+
+  labs(y = "Número de CL0", x = "", fill = "", 
+       title = "3 drogas menos usadas em cada país")+
+  theme_minimal() +
+  theme(legend.position = "bottom")+
+  coord_flip()
+
+```
 
 
