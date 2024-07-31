@@ -121,11 +121,13 @@ run_model_select <- function(db_clean, dist){
 
 data_clean = get_clean()
 
-data_split = rsample::initial_split(data = data_clean, prop = 0.75)
-train = rsample::training(data_split)
-test  = rsample::testing(data_split)
+# \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+# ISSO PODE DEMORAR!!!!
+# RODAR LASSO APENAS EM CASO DE VERIFICAÇÃO NECESSÁRIA
+# DESNECESSÁRIO NA PREDIÇÃO COM PIPELINE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+# \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
-model_lasso = run_model_select(db_clean = train, dist = "gaussian")
+# model_lasso = run_model_select(db_clean = data_clean, dist = "gaussian")
 
 # Import Dataset & EDA =========================================================
 
@@ -137,7 +139,6 @@ DataExplorer::plot_density(numeric_vars)
 DataExplorer::plot_correlation(numeric_vars)
 
 # Modelagem ====================================================================
-
 
 # Resultados do LASSO: 
 
@@ -152,9 +153,15 @@ vip::vip(model_lasso,
 
 # MODELAGEM \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
+pipeline <- function(pct_train, db){
+
+data_split = rsample::initial_split(data = db, prop = pct_train)
+train = rsample::training(data_split)
+test  = rsample::testing(data_split)
+
 # Baseline: Modelo de regressão múltiplo =======================================
 
-model_lm = stats::lm(formula = price ~., data = train)
+model_lm <- stats::lm(formula = price ~., data = train)
 
 # Random Forests ===============================================================
 
@@ -172,85 +179,79 @@ model_rf <- ranger::ranger(formula = price ~ .,
                            oob.error = T, 
                            verbose = T)
 
-# RF com validação cruzada: 
+# RF com validação cruzada =====================================================
 
 control <- caret::trainControl(method = "cv", number = 10)
+
+tune_grid <- expand.grid(mtry = sqrt(ncol(train) - 1),
+                         splitrule = "extratrees",  # Critério de divisão para regressão
+                         min.node.size = 5)
+
+model_rf_cv <- train(price ~ ., 
+                     data = train, 
+                     method = "ranger",
+                     trControl = control,
+                     tuneGrid = tune_grid,
+                     num.trees = 200)  
+
+# Rede Neural ==================================================================
+
+control <- caret::trainControl(method = "cv", number = 10)
+
+tune_grid <- base::expand.grid(size = seq(1, 10, by = 1),     # Tamanhos de 1 a 10 neurônios na camada oculta
+                              decay = c(0, 0.001, 0.01, 0.1))
+
+model_nn_cv <- caret::train(price ~ ., 
+                            data = train, 
+                            method = "nnet", 
+                            trControl = control, 
+                            tuneGrid = tune_grid, 
+                            linout = TRUE, 
+                            maxit = 100,     # Número máximo de iterações
+                            trace = FALSE)   # Desativar saída de treino
+
 
 # Predições: 
 
 results = test %>%
           dplyr::mutate(lm = stats::predict(model_lm, newdata = test), 
-                        random_forecast = stats::predict(model_rf, data = test)$predictions) %>% 
-          dplyr::select(price, lm, random_forecast)
+                        random_forest = stats::predict(model_rf, data = test)$predictions,
+                        random_forest_cv = stats::predict(model_rf_cv, newdata = test),
+                        model_nn_cv = stats::predict(model_nn_cv, newdata = test),
+                        combined = (lm + random_forest + random_forest_cv + model_nn_cv)/4) %>% 
+          dplyr::select(price, lm, random_forest, random_forest_cv, model_nn_cv, combined)
 
-# métricas 
+# métricas ====================================================================
 
-mae_value = mae(results$price, results$predicted_price) %>% print()
-rmse_value = rmse(results$price, results$predicted_price) %>% print()
-mape_value = mape(results$price, results$lm) %>% print()
-mape_value = mape(results$price, results$random_forecast) %>% print()
+calculate_metrics <- function(actual, predicted, model_name) {
+  
+  cat("\nMetrics for", model_name, "model:\n")
+  mae_value = mae(actual, predicted)
+  cat("MAE:", mae_value, "\n")
+  
+  rmse_value = rmse(actual, predicted)
+  cat("RMSE:", rmse_value, "\n")
+  
+  mse_value = mse(actual, predicted)
+  cat("MSE:", mse_value, "\n")
+  
+  mape_value = mape(actual, predicted)
+  cat("MAPE:", mape_value, "\n")
+  
+}
 
-#####################
-# VALIDAÇÃO: 
-# Visualizar as previsões
-head(predictions_rf)
+# Métricas para cada modelo
+
+calculate_metrics(results$price, results$lm, "Linear Regression")
+calculate_metrics(results$price, results$random_forest, "Random Forest")
+calculate_metrics(results$price, results$random_forest_cv, "Random Forest with CV")
+calculate_metrics(results$price, results$model_nn_cv, "Neural Network with CV")
+calculate_metrics(results$price, results$combined, "Combined")
+
+return(results)
+
+}
 
 
-# performance::check_model(model_lm)
-gtsummary::tbl_regression(model_lm)
+result = pipeline(db = data_clean, pct_train = 0.75)
 
-vip::vip(model_lm)
-performance::performance(model = model_lm)
-equatiomatic::extract_eq(model = model_lm)
-#####################
-
-
-# library(ranger)
-# library(dplyr)
-# 
-# # Número de folds para validação cruzada
-# k <- 5
-# 
-# # Dividir os dados em k folds
-# set.seed(123)
-# folds <- createFolds(train$price, k = k, list = TRUE)
-# 
-# # Armazenar erros para cada fold
-# errors <- data.frame(fold = 1:k, mse = numeric(k), rmse = numeric(k))
-# 
-# for (i in 1:k) {
-#   
-#   # Dados de treinamento e teste para o fold i
-#   
-#   train_fold <- train[-folds[[i]], ]
-#   test_fold <- train[folds[[i]], ]
-#   
-#   # Ajustar o modelo Ranger
-#   
-#   model_rf <- ranger::ranger(formula = price ~ ., 
-#                              data = train, 
-#                              num.trees = 100, 
-#                              mtry = sqrt(ncol(train) - 1), 
-#                              importance = 'impurity', 
-#                              min.node.size = 5, 
-#                              sample.fraction = 0.8, 
-#                              regularization.factor = 1, 
-#                              regularization.usedepth = F, 
-#                              num.threads = parallel::detectCores(), 
-#                              save.memory = T, 
-#                              oob.error = T, 
-#                              verbose = T)
-#   
-#   # Predições no fold de teste
-#   predictions_rf <- predict(model_rf, data = test_fold)$predictions
-#   
-#   # Calcular MSE e RMSE
-#   mse <- mean((test_fold$price - predictions_rf)^2)
-#   rmse <- sqrt(mse)
-#   
-#   errors[i, ] <- c(i, mse, rmse)
-# }
-# 
-# # Resumir erros médios
-# mean(errors$mse)
-# mean(errors$rmse)
