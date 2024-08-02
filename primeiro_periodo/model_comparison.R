@@ -7,20 +7,23 @@ setwd("~/Github/Projetos/IEEE/primeiro_periodo/archive")
 
 # Importando a predição dos modelos: 
 
-random_forest = readxl::read_excel("predictions_nmodels.xlsx")
-extra_trees = utils::read.csv("predictions_extra_trees.csv")
+random_forest = utils::read.csv("random_forest.csv") %>% glimpse()
+random_forest_cv = utils::read.csv("random_forest_cv.csv") %>% glimpse()
+extra_trees = utils::read.csv("predictions_ETR.csv") %>% glimpse()
+xgb = utils::read.csv("XGB.csv") %>% glimpse()
 
-# utils::write.csv(random_forest, "predictions.csv", row.names = FALSE)
+# utils::write.csv(predict_final, "segundo_modelo.csv", row.names = FALSE)
 
-mean(random_forest$price)
-mean(extra_trees$predicted_price)
+# linear <- data.frame(price = lm_otimizado$price, set = 'model_linear')
 
-r <- data.frame(price = random_forest$price, set = 'random_forest_R')
-python <- data.frame(price = extra_trees$predicted_price, set = 'extra_trees_Python')
+rf <- data.frame(price = as.double(random_forest$price), set = 'RandomForest')
+rf_cv <- data.frame(price = as.double(random_forest_cv$price), set = 'RandomForest_cv')
+extra_trees <- data.frame(price = as.double(extra_trees$price), set = "Extra_trees")
+# xgb <- data.frame(price = as.double(xgb$price), set = "XGB")
 
-combined_data <- dplyr::bind_rows(r, python)
+combined_data <- dplyr::bind_rows(rf, rf_cv, extra_trees)
 
-
+# rm(combined_data)
 # Visualizando 
 
 ggplot2::ggplot(combined_data, aes(x = price, fill = set)) +
@@ -30,7 +33,10 @@ ggplot2::ggplot(combined_data, aes(x = price, fill = set)) +
           labs(title = "Distribuição de Preços",
                x = "",
                y = "Frequência", fill = "") +
-          scale_fill_manual(values = c("random_forest_R" = "blue",
-                                       "extra_trees_Python" = "red"))+
+          scale_fill_manual(values = c(
+                                       "RandomForest" = "red", 
+                                       "RandomForest_cv" = "blue",
+                                       # "model_linear" = "black", 
+                                       "Extra_trees" = "green"))+
           theme_minimal()+
           theme(legend.position = "bottom")
