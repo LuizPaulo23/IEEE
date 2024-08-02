@@ -78,7 +78,8 @@ get_clean <- function(){
                                  property_type = as.factor(property_type),
                                  extra_people = as.numeric(gsub("[\\$,]", "", extra_people)), 
                                  price = as.numeric(gsub("[\\$,]", "", price))) %>%
-                          # Valores do aluguel == 0 (no sense)
+        # pd.to_numeric(data_clean['price'].str.replace('[\$,]', '', regex=True), errors='coerce')                  
+        # Valores do aluguel == 0 (no sense)
                           filter(price > 0) %>% 
                           # Retirado após testes 
                           select(-host_is_superhost, -property_type) %>%  na.omit()
@@ -93,16 +94,16 @@ get_clean <- function(){
 
 # get_transformation: transformação dos dados, feature engine 
 
-get_transformation <- function(transformation){
-
-data_clean_transf = data_clean %>% 
-                    dplyr::mutate_if(is.numeric, 
-                                     ~dlookr::transform(., method = transformation))
-
-
-return(data_clean_transf)
-
-}
+# get_transformation <- function(transformation){
+# 
+# data_clean_transf = data_clean %>% 
+#                     dplyr::mutate_if(is.numeric, 
+#                                      ~dlookr::transform(., method = transformation))
+# 
+# 
+# return(data_clean_transf)
+# 
+# }
 
 # run_model_select: Modelo LASSO para seleção de variáveis 
 
@@ -224,17 +225,17 @@ DataExplorer::plot_correlation(colinearidade)
 # vip::vi_model(model_lasso)
 # Usando o LASSO COMO PARÂMETRO DE SELEÇÃO DE VARIÁVEIS 
 
-# data_clean_train <- data_clean_train %>% 
-#                     dplyr::select(price, 
+# data_clean_train <- data_clean_train %>%
+#                     dplyr::select(price,
 #                                   latitude,
-#                                   longitude, 
+#                                   longitude,
 #                                   bedrooms,
-#                                   accommodates, 
-#                                   year, 
-#                                   number_of_reviews, 
+#                                   accommodates,
+#                                   year,
+#                                   #number_of_reviews,
 #                                   minimum_nights)
 
-# Modelo de regressão múltipica otimizado 
+# Modelo de regressão múltipica otimizado
 
 
 # model_lm <- stats::lm(formula = price ~., data = data_clean_train)
@@ -285,19 +286,19 @@ model_rf_cv <- train(price ~ .,
 
 # Rede Neural ==================================================================
 
-# control <- caret::trainControl(method = "cv", number = 1)
-# 
-# tune_grid <- base::expand.grid(size = seq(1, 10, by = 1),     # Tamanhos de 1 a 10 neurônios na camada oculta
-#                               decay = c(0, 0.001, 0.01, 0.1))
-# 
-# model_nn_cv <- caret::train(price ~ ., 
-#                             data = train, 
-#                             method = "nnet", 
-#                             trControl = control, 
-#                             tuneGrid = tune_grid, 
-#                             linout = TRUE, 
-#                             maxit = 1,     # Número máximo de iterações
-#                             trace = FALSE)   # Desativar saída de treino
+control <- caret::trainControl(method = "cv", number = 5)
+
+tune_grid <- base::expand.grid(size = seq(1, 10, by = 1),     # Tamanhos de 1 a 10 neurônios na camada oculta
+                              decay = c(0, 0.001, 0.01, 0.1))
+
+model_nn_cv <- caret::train(price ~ .,
+                            data = train,
+                            method = "nnet",
+                            trControl = control,
+                            tuneGrid = tune_grid,
+                            linout = TRUE,
+                            maxit = 100,     # Número máximo de iterações
+                            trace = FALSE)   # Desativar saída de treino
 
 
 # Predições: 
