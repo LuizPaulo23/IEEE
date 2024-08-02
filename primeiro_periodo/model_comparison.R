@@ -19,7 +19,7 @@ xgb = utils::read.csv("XGB.csv") %>% glimpse()
 rf <- data.frame(price = as.double(random_forest$price), set = 'RandomForest')
 rf_cv <- data.frame(price = as.double(random_forest_cv$price), set = 'RandomForest_cv')
 extra_trees <- data.frame(price = as.double(extra_trees$price), set = "Extra_trees")
-# xgb <- data.frame(price = as.double(xgb$price), set = "XGB")
+xgb <- data.frame(price = as.double(xgb$price), set = "XGB")
 
 combined_data <- dplyr::bind_rows(rf, rf_cv, extra_trees)
 
@@ -36,7 +36,7 @@ ggplot2::ggplot(combined_data, aes(x = price, fill = set)) +
           scale_fill_manual(values = c(
                                        "RandomForest" = "red", 
                                        "RandomForest_cv" = "blue",
-                                       # "model_linear" = "black", 
-                                       "Extra_trees" = "green"))+
+                                       # "XGB" = "black", 
+                                       "Extra_trees" = "black"))+
           theme_minimal()+
           theme(legend.position = "bottom")
