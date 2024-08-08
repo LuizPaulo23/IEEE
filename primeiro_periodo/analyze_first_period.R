@@ -86,7 +86,7 @@ get_clean <- function(){
   
       # Remover outliers automaticamente
   
-  data_clean <- get_remove_outliers(data_clean)
+  # data_clean <- get_remove_outliers(data_clean)
   
   return(data_clean)
 }
@@ -158,8 +158,10 @@ get_metrics <- function(actual, predicted, model_name) {
 
 data_clean_train = get_clean()
 
+naniar::gg_miss_var(data_clean_train)
+
 # getwd()
-# writexl::write_xlsx(data_clean_train, "data_clean_train.xlsx")
+# writexl::write_xlsx(data_clean_train, "data_final.xlsx")
 
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 # ISSO PODE DEMORAR!!!!

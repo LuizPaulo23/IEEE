@@ -11,7 +11,7 @@ random_forest = utils::read.csv("random_forest.csv") %>% glimpse()
 random_forest_cv = utils::read.csv("random_forest_cv.csv") %>% glimpse()
 extra_trees = utils::read.csv("predictions_ETR.csv") %>% glimpse()
 xgb = utils::read.csv("XGB.csv") %>% glimpse()
-pca = utils::read.csv("predictions_user_PCA.csv") %>% glimpse()
+pca = utils::read.csv("XGB_with_pca.csv") %>% glimpse()
 
 
 # utils::write.csv(predict_final, "segundo_modelo.csv", row.names = FALSE)

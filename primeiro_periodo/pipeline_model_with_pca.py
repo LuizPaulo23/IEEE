@@ -87,8 +87,8 @@ output_file_path = "predictions.csv"
 # Parametrização
 
 n_test = 0.25
-model_name = "tree"
-n_components = 10  # Número de componentes principais a ser utilizado no PCA
+model_name = "trees"
+n_components = 4  # Número de componentes principais a ser utilizado no PCA
 
 # Chamar Pipeline *\\
 

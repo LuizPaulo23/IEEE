@@ -31,6 +31,7 @@ def standardize_data(X_train, X_test):
     categorical_transformer = OneHotEncoder(handle_unknown = 'ignore')
 
     # Aplicando as transformações
+    
     preprocessor = ColumnTransformer(
         transformers=[
             ('num', numeric_transformer, numeric_features),
@@ -77,14 +78,14 @@ def predict_and_save(model, file_path, output_path, preprocessor):
 
 # Caminhos dos arquivos *\
 
-train_file_path = "data_clean_train.xlsx"
+train_file_path = "data_final.xlsx"
 test_file_path = "data_clean_test.xlsx"
 output_file_path = "predictions.csv"
 
 # Parametrização: 
 
 n_test = 0.25
-model = "trees"
+model = "tree"
 
 # Chamar Pipeline 
 
