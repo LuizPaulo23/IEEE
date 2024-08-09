@@ -1,10 +1,11 @@
 #' @title CIS IEEE UNB - CHURN
 #' @author Luiz Paulo Tavares Gonçalves 
 
-base::set.seed(123)
 base::rm(list = ls())
 grDevices::graphics.off()
 base::options(scipen = 999)
+
+base::set.seed(123)
 
 # Ambiente de trabalho =========================================================
 
@@ -18,7 +19,7 @@ pacman::p_load(tidyverse, data.table,
 
 # VAR GLOBAIS E CONSTANTES *\ 
 
-THRESHOLD = 0.5
+THRESHOLD = 0.45
 
 # FUNÇÕES ======================================================================
 
@@ -140,32 +141,32 @@ get_f1_score <- function(cm) {
 
 # run_LASSO ====================================================================
 
-# 
-# run_LASSO <- function(db_clean = data_clean, dist = "binomial"){
-#   
-#   n_matrix <- stats::model.matrix(churn_label ~ ., data = db_clean)[,-1]
-#   cv_lasso <- glmnet::cv.glmnet(n_matrix, db_clean$churn_label,alpha = 1, family = dist)
-#   
-#   summary(cv_lasso)
-#   cat("Menor Lambda é: ", cv_lasso$lambda.min)
-#   
-#   # Ajustar o modelo com o melhor lambda 
-#   
-#   lasso_model <- glmnet::glmnet(n_matrix,db_clean$churn_label, 
-#                                 alpha = 1, family = dist,
-#                                 lambda = cv_lasso$lambda.min)
-#   
-#   
-#   return(lasso_model)
-#   
-#   
-# }
+
+get_var_select_lasso <- function(db_clean = data_clean, dist = "binomial"){
+
+  n_matrix <- stats::model.matrix(churn_label ~ ., data = db_clean)[,-1]
+  cv_lasso <- glmnet::cv.glmnet(n_matrix, db_clean$churn_label,alpha = 1, family = dist)
+
+  summary(cv_lasso)
+  cat("Menor Lambda é: ", cv_lasso$lambda.min)
+
+  # Ajustar o modelo com o melhor lambda
+
+  lasso_model <- glmnet::glmnet(n_matrix,db_clean$churn_label,
+                                alpha = 1, family = dist,
+                                lambda = cv_lasso$lambda.min)
+
+
+  return(lasso_model)
+
+
+}
 
 # PIPE OF CLEAN ==========================================================
 
 # import dataset *\
 
-balance = "no"
+balance = "yes"
 
 if(balance == "no"){
   
@@ -182,8 +183,6 @@ if(balance == "no"){
   stop("ERRO: OPÇÃO INVÁLIDA")
   
 }
-
-
 
 # Split *\
 
@@ -217,15 +216,48 @@ data_test = get_var_select_manual(db = data_test_raw)
 data_test = get_impute(data = data_test)
 data_test = get_encoding(encode = "label", data = data_test)
 
+# VAR SELECT LASSO *\ ==========================================================
+
+var_select = get_var_select_lasso(db_clean = train)
+
+# Resultados do LASSO:
+
+lasso_coefficients <- coef(var_select) %>% print()
+
+vip::vip(var_select,
+         lambda = var_select[5],
+         num_features = 60) +
+    geom_bar(stat = "identity", fill = "darkorange")+
+    ggtitle("Variáveis mais relevantes")
+
+train <- train %>% select(-gender,
+                          -longitude,
+                          -latitude,
+                          -total_charges,
+                          -monthly_charges)
+
+validation <- validation %>% select(-gender,
+                                    -longitude,
+                                    -latitude,
+                                    -total_charges,
+                                    -monthly_charges)
+
 # Modelagem ====================================================================
 # BASELINE: Logit balanceado ===================================================
+
+# logit_select_manual <- stats::glm(churn_label ~ dependents+tenure_months+contract, 
+#                                   data = train, family = "binomial")
 
 logit_model <- stats::glm(churn_label ~ ., data = train, family = "binomial")
 
 # Classificação via logit 
+# THRESHOLD = 0.99
+# 0.43 = 0.8058691
+# 0.44 = 0.8072976 
+# 0.45 = 0.8096886 
 
 predictions_prob <- stats::predict(logit_model, newdata = validation, type = "response")
-predictions <- ifelse(predictions_prob > THRESHOLD, "Yes", "No")
+predictions <- ifelse(predictions_prob > THRESHOLD , "Yes", "No")
 
 # Maxtriz de confusão 
 
@@ -260,10 +292,9 @@ submit_prediction = data.frame("CustomerID" = data_test_raw$customer_id,
 
 
 getwd()
-# utils::write.csv(submit_prediction , "model_logit_nao_balanceado.csv", row.names = FALSE)
+# utils::write.csv(submit_prediction , "model_logit_balanceado_lasso.csv", row.names = FALSE)
 
 # Modelos de classificação \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-
 
 # Random Forrest *\
 
@@ -285,7 +316,6 @@ model_tree <- caret::train(churn_label ~ .,
                                                     number = 10, 
                                                     allowParallel = TRUE, 
                                                     verboseIter = TRUE))
-
 # Gradient Boosting *\
 
 model_gbm <- caret::train(churn_label ~ .,
