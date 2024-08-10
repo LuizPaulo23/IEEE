@@ -218,29 +218,29 @@ data_test = get_encoding(encode = "label", data = data_test)
 
 # VAR SELECT LASSO *\ ==========================================================
 
-var_select = get_var_select_lasso(db_clean = train)
-
-# Resultados do LASSO:
-
-lasso_coefficients <- coef(var_select) %>% print()
-
-vip::vip(var_select,
-         lambda = var_select[5],
-         num_features = 60) +
-    geom_bar(stat = "identity", fill = "darkorange")+
-    ggtitle("Variáveis mais relevantes")
-
-train <- train %>% select(-gender,
-                          -longitude,
-                          -latitude,
-                          -total_charges,
-                          -monthly_charges)
-
-validation <- validation %>% select(-gender,
-                                    -longitude,
-                                    -latitude,
-                                    -total_charges,
-                                    -monthly_charges)
+# var_select = get_var_select_lasso(db_clean = train)
+# 
+# # Resultados do LASSO:
+# 
+# lasso_coefficients <- coef(var_select) %>% print()
+# 
+# vip::vip(var_select,
+#          lambda = var_select[5],
+#          num_features = 60) +
+#     geom_bar(stat = "identity", fill = "darkorange")+
+#     ggtitle("Variáveis mais relevantes")
+# 
+# train <- train %>% select(-gender,
+#                           -longitude,
+#                           -latitude,
+#                           -total_charges,
+#                           -monthly_charges)
+# 
+# validation <- validation %>% select(-gender,
+#                                     -longitude,
+#                                     -latitude,
+#                                     -total_charges,
+#                                     -monthly_charges)
 
 # Modelagem ====================================================================
 # BASELINE: Logit balanceado ===================================================
