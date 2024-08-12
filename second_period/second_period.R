@@ -19,7 +19,7 @@ pacman::p_load(tidyverse, data.table,
 
 # VAR GLOBAIS E CONSTANTES *\ 
 
-THRESHOLD = 0.45
+THRESHOLD = 0.39
 
 # FUNÇÕES ======================================================================
 
@@ -166,23 +166,45 @@ get_var_select_lasso <- function(db_clean = data_clean, dist = "binomial"){
 
 # import dataset *\
 
-balance = "yes"
+ balance = "yes"
 
-if(balance == "no"){
-  
+ if(balance == "no"){
+
   data_train = get_import(db = "df_train")
   print(table(data_train$churn_label))
-  
+
 } else if(balance == "yes"){
-  
+
   data_train = balance_dataset(get_import(db = "df_train"), target_col = "churn_label")
   print(table(data_train$churn_label))
-  
+
 } else{
-  
+
   stop("ERRO: OPÇÃO INVÁLIDA")
-  
+
 }
+
+
+# Configurar a semente para reprodutibilidade *\
+
+# data_train = get_import(db = "df_train")
+# n <- 1500
+# 
+# # Selecionar 1500 linhas aleatórias para cada grupo
+# 
+# yes_samples <- subset(data_train, churn_label == "Yes")
+# no_samples <- subset(data_train, churn_label == "No")
+# 
+# yes_sampled <- yes_samples[sample(nrow(yes_samples), n), ]
+# no_sampled <- no_samples[sample(nrow(no_samples), n), ]
+# 
+# # Juntar as amostras em um novo data.frame
+# combined_samples <- rbind(yes_sampled, no_sampled)
+# 
+# # Verificar o resultado
+# table(combined_samples$churn_label)
+# 
+# data_train = combined_samples
 
 # Split *\
 
@@ -208,6 +230,9 @@ validation = get_impute(data = validation)
 
 train = get_encoding(encode = "label", data = train)
 validation = get_encoding(encode = "label", data = validation)
+
+# writexl::write_xlsx(train, "train_balanceado.xlsx")
+# writexl::write_xlsx(validation, "validation_balanceado.xlsx")
 
 # Base de Teste \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
@@ -292,7 +317,7 @@ submit_prediction = data.frame("CustomerID" = data_test_raw$customer_id,
 
 
 getwd()
-# utils::write.csv(submit_prediction , "model_logit_balanceado_lasso.csv", row.names = FALSE)
+# utils::write.csv(submit_prediction , "model_logit_ultimo.csv", row.names = FALSE)
 
 # Modelos de classificação \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
@@ -368,8 +393,8 @@ model_knn <- train(churn_label ~ .,
 rf = get_confusionMatrix(model = model_rf, validation) %>% print()
 rf_f1 = get_f1_score(cm = rf) %>% print()
 
-tree = get_confusionMatrix(model = model_tree, validation) %>% print()
-tree_f1 = get_f1_score(cm = tree) %>% print()
+# tree = get_confusionMatrix(model = model_tree, validation) %>% print()
+# tree_f1 = get_f1_score(cm = tree) %>% print()
 
 gbm = get_confusionMatrix(model = model_gbm, validation) %>% print()
 gbm_f1 = get_f1_score(cm = gbm) %>% print()
@@ -385,21 +410,21 @@ knn_f1 = get_f1_score(cm = knn) %>% print()
 
 
 model_compare <- data.frame(model = c('Random Forest',
-                                      'Trees',
+                                      # 'Trees',
                                       'Gradient Boosting',
                                       "Rede Neural",
                                       'Linear Discriminant', 
                                       'KNN', 
                                       "Logit"),
                             accuracy = c(rf$overall[1],
-                                         tree$overall[1],
+                                         # tree$overall[1],
                                          gbm$overall[1],
                                          nn$overall[1],
                                          lda$overall[1], 
                                          knn$overall[1], 
                                          accuracy), 
                             F1 = c(rf_f1[1], 
-                                   tree_f1[1], 
+                                   # tree_f1[1], 
                                    gbm_f1[1], 
                                    nn_f1[1], 
                                    lda_f1[1], 
@@ -428,11 +453,12 @@ ggplot(model_compare) +
 submit_combined = data.frame("CustomerID" = data_test_raw$customer_id, 
                              Logit = ifelse(predictions_prob > THRESHOLD, "Yes", "No"), 
                              rf = predict(model_rf, newdata = data_test), 
-                             tree = predict(model_tree, newdata = data_test), 
+                             # tree = predict(model_tree, newdata = data_test), 
                              gbm = predict(model_gbm, newdata = data_test), 
-                             nn = predict(model_nn, newdata = data_test), 
-                             lda = predict(model_lda, newdata = data_test), 
-                             knn = predict(model_knn, newdata = data_test))
+                             nn = predict(model_nn, newdata = data_test)
+                             # lda = predict(model_lda, newdata = data_test), 
+                             # knn = predict(model_knn, newdata = data_test)
+                             )
 
 
 
@@ -462,7 +488,6 @@ submit_combined$mode <- apply(submit_combined[, -1], 1, find_mode)
 submit_combined <- submit_combined %>% 
   select(CustomerID,mode)
 
-
 getwd()
 
-utils::write.csv(submit_combined, "model_combined_desbalanceado.csv", row.names = FALSE)
+utils::write.csv(submit_combined, "model_combined_ultimo2.csv", row.names = FALSE)
