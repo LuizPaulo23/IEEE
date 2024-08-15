@@ -30,7 +30,7 @@ def get_load_cleaned(db: str) -> pd.DataFrame:
 
 # get_standardize: simply standardize the data 
 
-def get_standardize(data_cleaned, method): 
+def get_standardize(data_cleaned): 
 
     """"
     Standardize only numeric columns 
