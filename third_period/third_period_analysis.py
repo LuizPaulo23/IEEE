@@ -1,14 +1,17 @@
 #' @title CIS IEEE UNB - Mall Customer Segmentation Data
 #' @author Luiz Paulo Tavares Gonçalves 
 
+import warnings
+warnings.filterwarnings("ignore")
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import numpy as np
 import janitor
-
-from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
 
 # Functions *\
 # get_load_cleaned: imports, cleans, and organizes the dataset  
@@ -27,34 +30,51 @@ def get_load_cleaned(db: str) -> pd.DataFrame:
 
 # get_standardize: simply standardize the data 
 
-def get_standardize(data_cleaned): 
+def get_standardize(data_cleaned, method): 
 
     """"
     Standardize only numeric columns 
     """
-
     scaler = StandardScaler()
 
     numeric_cols = data_cleaned.select_dtypes(include = ['number']).columns
     data_cleaned[numeric_cols] = scaler.fit_transform(data_cleaned[numeric_cols])
     return data_cleaned
     
-# Clustering: apply the Elbow method to determine the ideal number of clusters 
+# Clustering
 
 def get_clusters(data_clean, k_optimal): 
-    kmeans = KMeans(n_clusters = k_optimal, random_state = 123)
+
+    """
+    Clustering: K-means ++
+    Calculate the centroids
+    Plot clusters, clusters with centroids
+    """
+
+    kmeans = KMeans(n_clusters = k_optimal, init = 'k-means++', random_state = 123)
     clusters = kmeans.fit_predict(data_clean)
     data_clean['cluster'] = clusters
 
-    # Plotar o gráfico com os clusters
+    # print the centroids *\
+
+    centroids = kmeans.cluster_centers_
+    print("Centroids: \n", centroids)
+
+    # Plotar o gráfico com os clusters *\
 
     plt.figure(figsize = (10, 8))
 
     sns.scatterplot(data = data_clean, 
                     x = 'income', 
                     y = 'score',
-                    hue = 'cluster', palette = 'viridis', legend='full')
+                    hue = 'cluster', palette = 'viridis', legend = 'full')
     
+    # plot centroids *\
+
+    plt.scatter(centroids[:, 0], centroids[:, 1], s = 200, c = 'red', marker = 'X', label='Centroids')
+
+    # Clusters *\*
+
     plt.title('Clusters Formados pelo K-means')
     plt.xlabel('Renda')
     plt.ylabel('Score')
@@ -79,15 +99,11 @@ def get_sse(data_clean, k_max):
 # get_optimal_k: optimal point for the k 
 # Forma analítica 
 
-def get_optimal_k(sse): 
+def get_optimal_k(input): 
     
     """"
     Optimal point for the k
-    Finding the second difference is the smallest 
     """
-    second_diff = np.diff(np.diff(sse))
-    optimal_k = np.argmin(second_diff) + 2
-    return optimal_k
 
 
 
@@ -110,9 +126,14 @@ if __name__ == "__main__":
         
     # Standardizing and selecting variables (number 2)
 
-    data_scaled = get_standardize(data_cleaned)
-    data_select = data_scaled[["income", "score"]]
-    
+    # data_scaled = get_standardize(data_cleaned)
+    # data_select = data_scaled[["income", "score"]]
+
+    # Applying natural logarithm
+
+    data_select = data_cleaned[["income", "score"]].apply(np.log1p)
+    print(data_select)
+ 
     # Clustering: K-means (number 3 e 4)
 
     k = 10
@@ -127,16 +148,15 @@ if __name__ == "__main__":
 
     # Clustering with k-max = 10
 
-    get_clusters(data_clean = data_select, k_optimal = k)
+    # get_clusters(data_clean = data_select, k_optimal = k)
 
     # Clustering: optimal point for the k 
 
-    print(sse_values)
-    optimal_k = get_optimal_k(sse_values)
-    print(f"O número ideal de clusters é: {optimal_k}")
 
     # with the ideal number of clusters 
 
+    get_clusters(data_clean = data_select, k_optimal = 2)
     get_clusters(data_clean = data_select, k_optimal = 3)
-    
-   
+    # get_clusters(data_clean = data_select, k_optimal = 4)
+
+    plt.show()
