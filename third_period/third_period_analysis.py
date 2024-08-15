@@ -99,17 +99,36 @@ def get_sse(data_clean, k_max):
 # get_optimal_k: optimal point for the k 
 # Forma analítica 
 
-def get_optimal_k(input): 
+def get_optimal_k(error):
     
-    """"
-    Optimal point for the k
     """
+    Optimal point for the k
+    Função para calcular o número ideal de clusters usando o método do cotovelo.
+    :param sse: Lista contendo os valores de SSE (soma dos erros quadráticos) para diferentes valores de k.
+    :return: Número de clusters ótimo.
+    """
+   
+    diffs = np.diff(error)
+
+    # Calcula a segunda derivada para encontrar o ponto de inflexão
+   
+    second_diffs = np.diff(diffs)
+    k_optimal_index = np.argmax(second_diffs) + 1  # +1 para corrigir o deslocamento das derivadas
+    k_optimal = k_optimal_index + 1
+
+    print("*****-------***** \n")
+
+    print("Segunda Diferença: ", second_diffs)
+
+    print("Index:", k_optimal_index)
+    print("K ótimo é: ", k_optimal)    
+
+    print("*****-------***** \n")
+    
+    return k_optimal
 
 
-
-# Pipeline *\*
-
-
+# Pipeline *\* *\* *\* *\* *\* *\* *\* *\* *\* *\* *\* *\* *\*
 
 
 if __name__ == "__main__": 
@@ -152,11 +171,11 @@ if __name__ == "__main__":
 
     # Clustering: optimal point for the k 
 
+    optimum_point = get_optimal_k(error = sse_values)
 
     # with the ideal number of clusters 
 
-    get_clusters(data_clean = data_select, k_optimal = 2)
-    get_clusters(data_clean = data_select, k_optimal = 3)
-    # get_clusters(data_clean = data_select, k_optimal = 4)
+    get_clusters(data_clean = data_select, k_optimal = optimum_point)
+    get_clusters(data_clean = data_select, k_optimal = optimum_point + 1)
 
     plt.show()
