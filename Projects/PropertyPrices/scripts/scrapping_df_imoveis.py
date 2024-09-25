@@ -16,7 +16,7 @@ HEADERS = {
 }
 
 BASE_URL = "https://www.dfimoveis.com.br/venda/df/todos/imoveis?pagina="
-NUM_PAGES = 1399 # A dinâmica de raspagem entre as pages está estática, precisa ser passado o número de paǵinas disponíveis
+NUM_PAGES = 1 # A dinâmica de raspagem entre as pages está estática, precisa ser passado o número de paǵinas disponíveis
 # \* possível automação: deixar automático o NUM_PAGES \* 
 REQUEST_DELAY = 2  
 
@@ -27,34 +27,54 @@ def extract_property_data(property_soup):
         selected_element = element.select_one(selector)
         return selected_element.get_text(strip = True) if selected_element else None
 
+    # Descrição do imóvel \* 
+
     description = get_text_or_none(property_soup, 'h2.new-title.phrase')
+
+    # Tipo do imóvel \* 
+
+    type_property = get_text_or_none(property_soup, 'h3.new-desc.phrase')
+
+    # Preço total do imóvel \* 
+
     price = get_text_or_none(property_soup, 'div.new-price span')
+
+    # Preço por m² \* 
+
     price_per_m2 = get_text_or_none(property_soup, 'h4:contains("Valor m² R$") span')
 
-    # tamanho em m² \* 
+    # Tamanho em m² \* 
 
-    size_m2_element = property_soup.find('span', string=lambda x: x and "m²" in x)
-    size_m2 = size_m2_element.get_text(strip=True) if size_m2_element else None
+    size_m2_element = property_soup.find('span', string = lambda x: x and "m²" in x)
+    size_m2 = size_m2_element.get_text(strip = True) if size_m2_element else None
 
-    # bedroom \* 
+    # Nº de quartos \* 
 
-    bedroom_element = property_soup.find('span', string=lambda x: x and re.search(r'\b(quartos?|Quartos?)\b', x))
-    bedroom = bedroom_element.get_text(strip=True) if bedroom_element else None
+    bedroom_element = property_soup.find('span', string = lambda x: x and re.search(r'\b(quartos?|Quartos?)\b', x))
+    bedroom = bedroom_element.get_text(strip = True) if bedroom_element else None
+
+    # Número de Vagas para carros \* 
+
+    car_spaces_element = property_soup.find('span', string = lambda x: x and re.search(r'\b(Vaga?|Vagas?)\b', x))
+    car_spaces = car_spaces_element.get_text(strip = True) if car_spaces_element else None
+
 
     return {
         
         'description': description,
+        'type': type_property,
         'price': price,
         'price_per_m2': price_per_m2,
         'size': size_m2,
-        'bedrooms': bedroom
+        'bedrooms': bedroom, 
+        'car_spaces': car_spaces
     }
 
 # Function for scraping a single page \* 
 
 def scrape_page(page_number):
     url = f"{BASE_URL}{page_number}"
-    response = requests.get(url, headers=HEADERS)
+    response = requests.get(url, headers = HEADERS)
     
     if response.status_code != 200:
         print(f"Erro ao acessar a página {page_number}. Status code: {response.status_code}")
