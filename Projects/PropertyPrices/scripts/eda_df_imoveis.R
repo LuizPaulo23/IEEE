@@ -30,7 +30,8 @@ get_remove_outliers <- function(data) {
     lower_bound <- Q1 - 1.5 * IQR
     upper_bound <- Q3 + 1.5 * IQR
     
-    data <- data %>% dplyr::filter(data[[column]] >= lower_bound & data[[column]] <= upper_bound)
+    data <- data %>% dplyr::filter(data[[column]] >= lower_bound & 
+                                     data[[column]] <= upper_bound)
   }
   return(data)
 }
@@ -43,18 +44,36 @@ data_raw = readxl::read_excel("imoveis_df.xlsx") %>%
            stats::na.omit() %>% 
            dplyr::mutate(bedrooms = as.integer(str_sub(bedrooms, 
                                                        start = 1, end = 1)), 
-                         price = as.numeric(base::gsub("\\.", "", price)), 
+                         price = as.numeric(base::gsub("\\.", "", price))/10^6,
                          price_m2 = as.numeric(base::gsub("\\.", "", price_m2)), 
-                         size_m2 = as.numeric(base::gsub("m²", "", size_m2)))
+                         size_m2 = as.numeric(base::gsub("m²", "", size_m2))) 
 
+
+
+censorship_filter <- function(){
+  
+  n <- nrow(data_raw) * 0.05
+  
+  ordenado <- data_raw %>% 
+              dplyr::arrange(price) %>% 
+               dplyr::slice(1601:(n() - 1600))
+    
+  
+}
+data_raw = ordenado
 # Chamando Funcões \* 
 
 data_cleaned = get_remove_outliers(data = data_raw)
 
+summary(data_cleaned$price)
+summary(data_cleaned$price_m2)
+
+data_cleaned <- data_cleaned %>% 
+                filter(price_m2 > 1000)
+
 # Visualizando \* 
 
-DataExplorer::plot_intro(data = data_cleaned)
-
+# DataExplorer::plot_intro(data = data_cleaned)
 
 
 ggplot2::ggplot(data_cleaned, aes(x = price_m2)) +
